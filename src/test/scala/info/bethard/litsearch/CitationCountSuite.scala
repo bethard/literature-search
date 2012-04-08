@@ -51,7 +51,44 @@ class CitationCountSuite extends FunSuite {
       origIndexDir.delete()
       citationCountIndexDir.delete()
     }
+  }
 
+  test("query returns correct citation counts") {
+    val origIndexDir = this.tempIndexDirectory
+    val citationCountIndexDir = this.tempIndexDirectory
+
+    try {
+      // construct a simple index of articles
+      import IndexConfig.FieldNames.{ articleID, citedArticleIDs }
+      val origReader = this.buildIndex(
+        origIndexDir,
+        Seq(articleID -> "0", citedArticleIDs -> ""),
+        Seq(articleID -> "1", citedArticleIDs -> "0"),
+        Seq(articleID -> "2", citedArticleIDs -> "1"),
+        Seq(articleID -> "3", citedArticleIDs -> "0 2"))
+
+      // construct the index of citation counts
+      val index = new CitationCountIndex(FSDirectory.open(citationCountIndexDir))
+      index.buildFrom(origReader)
+      origReader.close
+
+      // check the values of the citation counts
+      val reader = index.reader
+      val searcher = new IndexSearcher(reader)
+      val query = index.query
+      val topDocs = searcher.search(query, reader.maxDoc)
+      assert(topDocs.totalHits === 4)
+      assert(topDocs.scoreDocs(0).score == 2)
+      assert(topDocs.scoreDocs(1).score == 1)
+      assert(topDocs.scoreDocs(2).score == 1)
+      assert(topDocs.scoreDocs(3).score == 0)
+      searcher.close
+      reader.close
+
+    } finally {
+      origIndexDir.delete()
+      citationCountIndexDir.delete()
+    }
   }
 
   private def tempIndexDirectory: File = {
