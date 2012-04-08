@@ -26,7 +26,7 @@ class CitationCountSuite extends FunSuite {
         Seq(articleID -> "0", citedArticleIDs -> ""),
         Seq(articleID -> "1", citedArticleIDs -> "0"),
         Seq(articleID -> "2", citedArticleIDs -> "1"),
-        Seq(articleID -> "3", citedArticleIDs -> "0"))
+        Seq(articleID -> "3", citedArticleIDs -> "0 1 2"))
 
       // construct the index of citation counts
       val index = new CitationCountIndex(FSDirectory.open(citationCountIndexDir))
@@ -39,8 +39,8 @@ class CitationCountSuite extends FunSuite {
       assert(searcher.maxDoc() === 4)
       import IndexConfig.FieldNames.citationCount
       assert(searcher.doc(0).get(citationCount) === "2")
-      assert(searcher.doc(1).get(citationCount) === "1")
-      assert(searcher.doc(2).get(citationCount) === "0")
+      assert(searcher.doc(1).get(citationCount) === "2")
+      assert(searcher.doc(2).get(citationCount) === "1")
       assert(searcher.doc(3).get(citationCount) === "0")
       searcher.close
       reader.close
