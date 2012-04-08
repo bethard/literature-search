@@ -15,21 +15,18 @@ import org.apache.lucene.index.IndexReader
 class CitationCountSuite extends FunSuite {
 
   test("index is created with correct citation counts") {
-    val idField = IndexConfig.FieldNames.articleID
-    val citedIDsField = IndexConfig.FieldNames.citedArticleIDs
-    val citationCountField = IndexConfig.FieldNames.citationCount
-
     val origIndexDir = this.tempIndexDirectory
     val citationCountIndexDir = this.tempIndexDirectory
 
     try {
       // construct a simple index of articles
+      import IndexConfig.FieldNames.{ articleID, citedArticleIDs }
       val origReader = this.buildIndex(
         origIndexDir,
-        Seq(idField -> "0", citedIDsField -> ""),
-        Seq(idField -> "1", citedIDsField -> "0"),
-        Seq(idField -> "2", citedIDsField -> "1"),
-        Seq(idField -> "3", citedIDsField -> "0"))
+        Seq(articleID -> "0", citedArticleIDs -> ""),
+        Seq(articleID -> "1", citedArticleIDs -> "0"),
+        Seq(articleID -> "2", citedArticleIDs -> "1"),
+        Seq(articleID -> "3", citedArticleIDs -> "0"))
 
       // construct the index of citation counts
       val index = new CitationCountIndex(FSDirectory.open(citationCountIndexDir))
@@ -40,10 +37,11 @@ class CitationCountSuite extends FunSuite {
       val reader = index.reader
       val searcher = new IndexSearcher(reader)
       assert(searcher.maxDoc() === 4)
-      assert(searcher.doc(0).get(citationCountField) === "2")
-      assert(searcher.doc(1).get(citationCountField) === "1")
-      assert(searcher.doc(2).get(citationCountField) === "0")
-      assert(searcher.doc(3).get(citationCountField) === "0")
+      import IndexConfig.FieldNames.citationCount
+      assert(searcher.doc(0).get(citationCount) === "2")
+      assert(searcher.doc(1).get(citationCount) === "1")
+      assert(searcher.doc(2).get(citationCount) === "0")
+      assert(searcher.doc(3).get(citationCount) === "0")
       searcher.close
       reader.close
 
