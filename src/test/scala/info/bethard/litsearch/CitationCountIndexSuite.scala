@@ -6,7 +6,7 @@ import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.store.FSDirectory
 
 @RunWith(classOf[JUnitRunner])
-class CitationCountSuite extends IndexSuiteBase {
+class CitationCountIndexSuite extends IndexSuiteBase {
 
   test("index is created with correct citation counts") {
     import IndexConfig.FieldNames.{ articleID, citedArticleIDs }
