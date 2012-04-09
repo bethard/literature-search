@@ -24,7 +24,9 @@ object IndexConfig {
       FieldNames.citationCount -> new KeywordAnalyzer).asJava)
 
   def newIndexWriter(directory: Directory): IndexWriter = {
-    new IndexWriter(directory, new IndexWriterConfig(Version.LUCENE_35, this.analyzer))
+    val config = new IndexWriterConfig(Version.LUCENE_35, this.analyzer)
+    config.setOpenMode(IndexWriterConfig.OpenMode.CREATE)
+    new IndexWriter(directory, config)
   }
 
   def newQueryParser(defaultField: String): QueryParser = {
