@@ -44,7 +44,7 @@ class CitationCountIndexSuite extends IndexSuiteBase {
         Seq(articleID -> "0", citedArticleIDs -> ""),
         Seq(articleID -> "1", citedArticleIDs -> "0"),
         Seq(articleID -> "2", citedArticleIDs -> "1"),
-        Seq(articleID -> "3", citedArticleIDs -> "0 2"))
+        Seq(articleID -> "3", citedArticleIDs -> "1 2"))
       tempDir <- this.temporaryDirectory
     } {
       // construct the index of citation counts
@@ -57,10 +57,9 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       val query = index.query
       val topDocs = searcher.search(query, reader.maxDoc)
       assert(topDocs.totalHits === 4)
-      assert(topDocs.scoreDocs(0).score === 2)
-      assert(topDocs.scoreDocs(1).score === 1)
-      assert(topDocs.scoreDocs(2).score === 1)
-      assert(topDocs.scoreDocs(3).score === 0)
+      val expectedScores = Array(0 -> 1.0, 1 -> 2.0, 2 -> 1.0, 3 -> 0.0)
+      val actualScores = topDocs.scoreDocs.map(d => d.doc -> d.score)
+      assert(expectedScores.toMap === actualScores.toMap)
       searcher.close
       reader.close
     }
