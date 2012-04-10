@@ -57,10 +57,10 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       val query = index.query
       val topDocs = searcher.search(query, reader.maxDoc)
       assert(topDocs.totalHits === 4)
-      assert(topDocs.scoreDocs(0).score == 2)
-      assert(topDocs.scoreDocs(1).score == 1)
-      assert(topDocs.scoreDocs(2).score == 1)
-      assert(topDocs.scoreDocs(3).score == 0)
+      assert(topDocs.scoreDocs(0).score === 2)
+      assert(topDocs.scoreDocs(1).score === 1)
+      assert(topDocs.scoreDocs(2).score === 1)
+      assert(topDocs.scoreDocs(3).score === 0)
       searcher.close
       reader.close
     }
