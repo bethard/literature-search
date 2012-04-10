@@ -15,7 +15,9 @@ object IndexConfig {
   object FieldNames {
     val articleID = "ArticleID"
     val citedArticleIDs = "CitedArticleIDs"
+    val year = "Year"
     val citationCount = "CitationCount"
+    val age = "Age"
   }
   val analyzer = new PerFieldAnalyzerWrapper(
     new StandardAnalyzer(Version.LUCENE_35),
