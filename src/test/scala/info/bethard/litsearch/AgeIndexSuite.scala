@@ -51,7 +51,7 @@ class AgeIndexSuite extends IndexSuiteBase {
     } {
       // construct the index of citation counts
       val index = new AgeIndex(FSDirectory.open(tempDir))
-      index.buildFrom(tempReader, 2012)
+      index.buildFrom(tempReader, 2020)
 
       // check the values of the citation counts
       val reader = index.reader
@@ -59,7 +59,7 @@ class AgeIndexSuite extends IndexSuiteBase {
       val query = index.query
       val topDocs = searcher.search(query, reader.maxDoc)
       assert(topDocs.totalHits === 4)
-      val expectedScores = Array(0 -> 12.0, 1 -> 3.0, 2 -> 0.0, 3 -> 19.0)
+      val expectedScores = Array(0 -> 20.0, 1 -> 11.0, 2 -> 8.0, 3 -> 27.0)
       val actualScores = topDocs.scoreDocs.map(d => d.doc -> d.score)
       assert(expectedScores.toMap === actualScores.toMap)
       searcher.close
