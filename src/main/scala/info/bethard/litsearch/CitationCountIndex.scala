@@ -13,7 +13,7 @@ import org.apache.lucene.search.Query
 import org.apache.lucene.search.function.ValueSourceQuery
 import org.apache.lucene.search.function.IntFieldSource
 
-class CitationCountIndex(directory: Directory) {
+class CitationCountIndex(directory: Directory) extends Index {
 
   def buildFrom(inputReader: IndexReader): Unit = {
     val inputSearcher = new IndexSearcher(inputReader)

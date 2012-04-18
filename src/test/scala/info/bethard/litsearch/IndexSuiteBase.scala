@@ -5,6 +5,7 @@ import org.apache.lucene.index.IndexReader
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field
+import org.apache.lucene.store.Directory
 
 abstract class IndexSuiteBase extends FunSuite {
 
@@ -28,6 +29,10 @@ abstract class IndexSuiteBase extends FunSuite {
       // delete this file (and assert that it was actually deleted)
       assert(file.delete() === true)
     }
+  }
+
+  def temporaryFSDirectory: Traversable[Directory] = {
+    this.temporaryDirectory.map(FSDirectory.open)
   }
 
   def temporaryIndexReader(docs: Seq[(String, String)]*): Traversable[IndexReader] = new Traversable[IndexReader] {

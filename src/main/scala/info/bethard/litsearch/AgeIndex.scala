@@ -13,7 +13,7 @@ import org.apache.lucene.search.Query
 import org.apache.lucene.search.function.ValueSourceQuery
 import org.apache.lucene.search.function.IntFieldSource
 
-class AgeIndex(directory: Directory) {
+class AgeIndex(directory: Directory) extends Index {
 
   def buildFrom(inputReader: IndexReader, fromYear: Int): Unit = {
     val inputSearcher = new IndexSearcher(inputReader)
