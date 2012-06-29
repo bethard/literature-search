@@ -10,13 +10,13 @@ import org.apache.lucene.search.DefaultSimilarity
 class CombinedIndexSuite extends IndexSuiteBase {
 
   test("index is created with correct citation counts") {
-    import IndexConfig.FieldNames.{ articleID, citedArticleIDs, year }
+    import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs, year }
     for {
       tempReader <- this.temporaryIndexReader(
-        Seq(articleID -> "0", year -> "1999", citedArticleIDs -> ""),
-        Seq(articleID -> "1", year -> "2000", citedArticleIDs -> "0"),
-        Seq(articleID -> "2", year -> "2005", citedArticleIDs -> "1"),
-        Seq(articleID -> "3", year -> "2002", citedArticleIDs -> "1 2"))
+        Seq(articleIDWhenCited -> "0", year -> "1999", citedArticleIDs -> ""),
+        Seq(articleIDWhenCited -> "1", year -> "2000", citedArticleIDs -> "0"),
+        Seq(articleIDWhenCited -> "2", year -> "2005", citedArticleIDs -> "1"),
+        Seq( /* test missing ID */ year -> "2002", citedArticleIDs -> "1 2"))
       citationCountIndexDirectory <- this.temporaryFSDirectory
       ageIndexDirectory <- this.temporaryFSDirectory
     } {
@@ -33,7 +33,7 @@ class CombinedIndexSuite extends IndexSuiteBase {
       val index = new CombinedIndex(citationCountIndex -> 10f, ageIndex -> -0.5f)
 
       // construct the reader and searcher
-      val reader = index.reader
+      val reader = index.openReader
       val searcher = new IndexSearcher(reader)
 
       // get rid of the query norm so that scores are directly interpretable
@@ -42,7 +42,7 @@ class CombinedIndexSuite extends IndexSuiteBase {
       })
 
       // check that scores are calculated as a weighted sum of the combined queries
-      val topDocs = searcher.search(index.query, reader.maxDoc)
+      val topDocs = searcher.search(index.createQuery(null), reader.maxDoc)
       assert(topDocs.totalHits === 4)
       val expectedScores = Array(
         0 -> (10f * 1 - 0.5 * 13),

@@ -9,13 +9,13 @@ import org.apache.lucene.store.FSDirectory
 class CitationCountIndexSuite extends IndexSuiteBase {
 
   test("index is created with correct citation counts") {
-    import IndexConfig.FieldNames.{ articleID, citedArticleIDs }
+    import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs }
     for {
       tempReader <- this.temporaryIndexReader(
-        Seq(articleID -> "0", citedArticleIDs -> ""),
-        Seq(articleID -> "1", citedArticleIDs -> "0"),
-        Seq(articleID -> "2", citedArticleIDs -> "1"),
-        Seq(articleID -> "3", citedArticleIDs -> "0 1 2"))
+        Seq(articleIDWhenCited -> "0", citedArticleIDs -> ""),
+        Seq(articleIDWhenCited -> "1", citedArticleIDs -> "0"),
+        Seq(articleIDWhenCited -> "2", citedArticleIDs -> "1"),
+        Seq(articleIDWhenCited -> "3", citedArticleIDs -> "0 1 2"))
       tempDir <- this.temporaryDirectory
     } {
 
@@ -24,7 +24,7 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       index.buildFrom(tempReader)
 
       // check the values of the citation counts
-      val reader = index.reader
+      val reader = index.openReader
       val searcher = new IndexSearcher(reader)
       assert(searcher.maxDoc() === 4)
       import IndexConfig.FieldNames.citationCount
@@ -38,13 +38,13 @@ class CitationCountIndexSuite extends IndexSuiteBase {
   }
 
   test("query returns correct citation counts") {
-    import IndexConfig.FieldNames.{ articleID, citedArticleIDs }
+    import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs }
     for {
       tempReader <- this.temporaryIndexReader(
-        Seq(articleID -> "0", citedArticleIDs -> ""),
-        Seq(articleID -> "1", citedArticleIDs -> "0"),
-        Seq(articleID -> "2", citedArticleIDs -> "1"),
-        Seq(articleID -> "3", citedArticleIDs -> "1 2"))
+        Seq(articleIDWhenCited -> "0", citedArticleIDs -> ""),
+        Seq(articleIDWhenCited -> "1", citedArticleIDs -> "0"),
+        Seq(articleIDWhenCited -> "2", citedArticleIDs -> "1"),
+        Seq(articleIDWhenCited -> "3", citedArticleIDs -> "1 2"))
       tempDir <- this.temporaryDirectory
     } {
       // construct the index of citation counts
@@ -52,9 +52,9 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       index.buildFrom(tempReader)
 
       // check the values of the citation counts
-      val reader = index.reader
+      val reader = index.openReader
       val searcher = new IndexSearcher(reader)
-      val query = index.query
+      val query = index.createQuery(null) // shouldn't use query text
       val topDocs = searcher.search(query, reader.maxDoc)
       assert(topDocs.totalHits === 4)
       val expectedScores = Array(0 -> 1.0, 1 -> 2.0, 2 -> 1.0, 3 -> 0.0)

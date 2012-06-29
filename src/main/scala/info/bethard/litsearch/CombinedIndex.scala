@@ -7,18 +7,18 @@ import org.apache.lucene.search.BooleanClause
 
 class CombinedIndex(indexWeights: (Index, Float)*) extends Index {
 
-  def reader: IndexReader = {
+  def openReader(): IndexReader = {
     val reader = new ParallelReader
     for ((index, weight) <- indexWeights) {
-      reader.add(index.reader)
+      reader.add(index.openReader())
     }
     reader
   }
 
-  def query: Query = {
+  def createQuery(queryText: String): Query = {
     val query = new BooleanQuery
     for ((index, weight) <- indexWeights) {
-      val subQuery = index.query
+      val subQuery = index.createQuery(queryText)
       subQuery.setBoost(weight)
       query.add(subQuery, BooleanClause.Occur.MUST)
     }

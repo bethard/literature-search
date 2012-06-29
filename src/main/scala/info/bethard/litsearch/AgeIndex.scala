@@ -32,7 +32,9 @@ class AgeIndex(directory: Directory) extends Index {
     writer.close()
   }
 
-  def reader: IndexReader = IndexReader.open(directory)
+  override def openReader(): IndexReader = IndexReader.open(directory)
 
-  def query: Query = new ValueSourceQuery(new IntFieldSource(IndexConfig.FieldNames.age))
+  override def createQuery(queryText: String): Query = {
+    new ValueSourceQuery(new IntFieldSource(IndexConfig.FieldNames.age))
+  }
 }

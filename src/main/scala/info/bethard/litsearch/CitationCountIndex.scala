@@ -20,12 +20,15 @@ class CitationCountIndex(directory: Directory) extends Index {
     val writer = IndexConfig.newIndexWriter(directory)
     val queryParser = IndexConfig.newQueryParser(IndexConfig.FieldNames.citedArticleIDs)
     for (i <- 0 until inputReader.maxDoc) {
-      val query = queryParser.parse(inputSearcher.doc(i).get(IndexConfig.FieldNames.articleID))
-      val citationCount = inputSearcher.search(query, inputSearcher.maxDoc).totalHits
+      val document = inputSearcher.doc(i)
+      val articleIDWhenCited = document.get(IndexConfig.FieldNames.articleIDWhenCited)
+      val citationCountOption = Option(articleIDWhenCited).map(id =>
+        inputSearcher.search(queryParser.parse(id), inputSearcher.maxDoc).totalHits)
+
       val doc = new Document
       doc.add(new Field(
         IndexConfig.FieldNames.citationCount,
-        citationCount.toString,
+        citationCountOption.getOrElse(0).toString,
         Field.Store.YES,
         Field.Index.NOT_ANALYZED))
       writer.addDocument(doc)
@@ -33,7 +36,9 @@ class CitationCountIndex(directory: Directory) extends Index {
     writer.close()
   }
 
-  def reader: IndexReader = IndexReader.open(directory)
+  override def openReader(): IndexReader = IndexReader.open(directory)
 
-  def query: Query = new ValueSourceQuery(new IntFieldSource(IndexConfig.FieldNames.citationCount))
+  override def createQuery(queryText: String): Query = {
+    new ValueSourceQuery(new IntFieldSource(IndexConfig.FieldNames.citationCount))
+  }
 }

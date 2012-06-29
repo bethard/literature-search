@@ -41,15 +41,7 @@ abstract class IndexSuiteBase extends FunSuite {
 
         // create the index from the given documents
         val fsDir = FSDirectory.open(indexDir)
-        val writer = IndexConfig.newIndexWriter(fsDir)
-        for (doc <- docs) {
-          val document = new Document
-          for ((key, value) <- doc) {
-            document.add(new Field(key, value, Field.Store.YES, Field.Index.ANALYZED))
-          }
-          writer.addDocument(document)
-        }
-        writer.close
+        writeDocuments(fsDir, docs: _*)
 
         // create the reader
         val reader = IndexReader.open(fsDir)
@@ -61,5 +53,17 @@ abstract class IndexSuiteBase extends FunSuite {
         reader.close
       }
     }
+  }
+
+  def writeDocuments(indexDir: Directory, docs: Seq[(String, String)]*) = {
+    val writer = IndexConfig.newIndexWriter(indexDir)
+    for (doc <- docs) {
+      val document = new Document
+      for ((key, value) <- doc) {
+        document.add(new Field(key, value, Field.Store.YES, Field.Index.ANALYZED))
+      }
+      writer.addDocument(document)
+    }
+    writer.close
   }
 }

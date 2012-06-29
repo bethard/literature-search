@@ -20,12 +20,12 @@ class AgeIndexSuite extends IndexSuiteBase {
       tempDir <- this.temporaryDirectory
     } {
 
-      // construct the index of citation counts
+      // construct the index of ages
       val index = new AgeIndex(FSDirectory.open(tempDir))
       index.buildFrom(tempReader, 2012)
 
-      // check the values of the citation counts
-      val reader = index.reader
+      // check the values of the ages
+      val reader = index.openReader
       val searcher = new IndexSearcher(reader)
       assert(searcher.maxDoc() === 4)
       import IndexConfig.FieldNames.age
@@ -49,14 +49,14 @@ class AgeIndexSuite extends IndexSuiteBase {
         Seq(year -> "1993"))
       tempDir <- this.temporaryDirectory
     } {
-      // construct the index of citation counts
+      // construct the index of ages
       val index = new AgeIndex(FSDirectory.open(tempDir))
       index.buildFrom(tempReader, 2020)
 
-      // check the values of the citation counts
-      val reader = index.reader
+      // check the values of the ages
+      val reader = index.openReader
       val searcher = new IndexSearcher(reader)
-      val query = index.query
+      val query = index.createQuery(null) // shouldn't use query text
       val topDocs = searcher.search(query, reader.maxDoc)
       assert(topDocs.totalHits === 4)
       val expectedScores = Array(0 -> 20.0, 1 -> 11.0, 2 -> 8.0, 3 -> 27.0)
