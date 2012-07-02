@@ -4,7 +4,7 @@
 	<groupId>info.bethard</groupId>
 	<artifactId>literature-search</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
-	<packaging>jar</packaging>
+	<packaging>war</packaging>
 	<name>Literature Search</name>
 	<description>Academic literature search engine inspired by: Steven Bethard and Dan Jurafsky. Who should I cite? Learning literature search models from citation behavior. In ACM Conference on Information and Knowledge Management, 2010.</description>
 	<url>https://github.com/bethard/literature-search</url>

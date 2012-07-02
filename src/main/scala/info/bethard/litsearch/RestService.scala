@@ -16,11 +16,16 @@ import scala.xml.{ Elem, Node, Null, Text, TopScope }
 object RestService extends RestHelper {
   private val logger = LoggerFactory.getLogger(this.getClass())
 
-  implicit def getDirectory(path: String): Directory = FSDirectory.open(new File(path))
-  val titleIndex = new TitleTextIndex("index/stanford/articles")
-  val abstractIndex = new AbstractTextIndex("index/stanford/articles")
-  val citationCountIndex = new CitationCountIndex("index/stanford-articles-citation-count")
-  val ageIndex = new AgeIndex("index/stanford-articles-age-2012")
+  // load configuration from properties
+  private def getDirectory(name: String): Directory = {
+    val path = Props.get(name).failMsg("\"%s\" property missing".format(name)).open_!
+    FSDirectory.open(new File(path))
+  }
+
+  val titleIndex = new TitleTextIndex(getDirectory("index.articles"))
+  val abstractIndex = new AbstractTextIndex(getDirectory("index.articles"))
+  val citationCountIndex = new CitationCountIndex(getDirectory("index.citation_count"))
+  val ageIndex = new AgeIndex(getDirectory("index.age"))
 
   serve {
     case Req("api" :: "literature-search" :: Nil, "xml", GetRequest | PostRequest) => {
