@@ -31,6 +31,7 @@
 		<maven.compiler.source>1.6</maven.compiler.source>
 		<maven.compiler.target>1.6</maven.compiler.target>
 		<scala.version>2.9.1</scala.version>
+		<lift.version>2.4</lift.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -54,6 +55,16 @@
 			<artifactId>scalatest_${scala.version}</artifactId>
 			<version>1.7.1</version>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.liftweb</groupId>
+			<artifactId>lift-util_${scala.version}</artifactId>
+			<version>${lift.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>net.liftweb</groupId>
+			<artifactId>lift-webkit_${scala.version}</artifactId>
+			<version>${lift.version}</version>
 		</dependency>
 	</dependencies>
 	<build>
