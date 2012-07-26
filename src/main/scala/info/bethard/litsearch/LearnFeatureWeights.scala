@@ -97,23 +97,4 @@ object LearnFeatureWeights {
     searcher.close
     reader.close
   }
-
-  class DocumentScoresCollector extends Collector {
-    var scorer: Scorer = null
-
-    override def setScorer(scorer: Scorer): Unit = {
-      this.scorer = scorer
-    }
-
-    override def acceptsDocsOutOfOrder(): Boolean = false
-
-    override def collect(doc: Int): Unit = {
-      val score = this.scorer.score
-
-    }
-
-    override def setNextReader(reader: IndexReader, docBase: Int): Unit = {
-    }
-  }
-
 }
