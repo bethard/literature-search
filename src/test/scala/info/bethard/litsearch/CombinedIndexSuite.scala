@@ -2,9 +2,10 @@ package info.bethard.litsearch
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.apache.lucene.store.FSDirectory
+import org.apache.lucene.index.DirectoryReader
+import org.apache.lucene.index.ParallelCompositeReader
 import org.apache.lucene.search.IndexSearcher
-import org.apache.lucene.search.DefaultSimilarity
+import org.apache.lucene.search.similarities.DefaultSimilarity
 
 @RunWith(classOf[JUnitRunner])
 class CombinedIndexSuite extends IndexSuiteBase {
@@ -12,28 +13,27 @@ class CombinedIndexSuite extends IndexSuiteBase {
   test("index is created with correct citation counts") {
     import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs, year }
     for {
-      tempReader <- this.temporaryIndexReader(
+      tempReader <- this.temporaryDirectoryReader(
         Seq(articleIDWhenCited -> "0", year -> "1999", citedArticleIDs -> ""),
         Seq(articleIDWhenCited -> "1", year -> "2000", citedArticleIDs -> "0"),
         Seq(articleIDWhenCited -> "2", year -> "2005", citedArticleIDs -> "1"),
         Seq( /* test missing ID */ year -> "2002", citedArticleIDs -> "1 2"))
       citationCountIndexDirectory <- this.temporaryFSDirectory
-      ageIndexDirectory <- this.temporaryFSDirectory
     } {
 
       // construct the index of citation counts
-      val citationCountIndex = new CitationCountIndex(citationCountIndexDirectory)
-      citationCountIndex.buildFrom(tempReader)
+      val citationCountIndex = new CitationCountIndex
+      citationCountIndex.buildFrom(tempReader, citationCountIndexDirectory)
+      val citationCountReader = DirectoryReader.open(citationCountIndexDirectory)
 
       // construct the index of age counts
-      val ageIndex = new AgeIndex(ageIndexDirectory)
-      ageIndex.buildFrom(tempReader, 2012)
+      val ageIndex = new AgeIndex(2012)
 
       // construct the combined index
       val index = new CombinedIndex(citationCountIndex -> 10f, ageIndex -> -0.5f)
 
       // construct the reader and searcher
-      val reader = index.openReader
+      val reader = new ParallelCompositeReader(tempReader, citationCountReader)
       val searcher = new IndexSearcher(reader)
 
       // get rid of the query norm so that scores are directly interpretable
@@ -53,7 +53,6 @@ class CombinedIndexSuite extends IndexSuiteBase {
       assert(expectedScores.toMap === actualScores.toMap)
 
       // close things we've opened
-      searcher.close
       reader.close
     }
   }

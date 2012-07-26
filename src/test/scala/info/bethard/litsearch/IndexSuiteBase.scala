@@ -1,11 +1,13 @@
 package info.bethard.litsearch
+
 import java.io.File
-import org.scalatest.FunSuite
-import org.apache.lucene.index.IndexReader
-import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field
+import org.apache.lucene.document.TextField
+import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.store.Directory
+import org.apache.lucene.store.FSDirectory
+import org.scalatest.FunSuite
 
 abstract class IndexSuiteBase extends FunSuite {
 
@@ -35,8 +37,8 @@ abstract class IndexSuiteBase extends FunSuite {
     this.temporaryDirectory.map(FSDirectory.open)
   }
 
-  def temporaryIndexReader(docs: Seq[(String, String)]*): Traversable[IndexReader] = new Traversable[IndexReader] {
-    override def foreach[U](f: IndexReader => U): Unit = {
+  def temporaryDirectoryReader(docs: Seq[(String, String)]*): Traversable[DirectoryReader] = new Traversable[DirectoryReader] {
+    override def foreach[U](f: DirectoryReader => U): Unit = {
       for (indexDir <- temporaryDirectory) {
 
         // create the index from the given documents
@@ -44,7 +46,7 @@ abstract class IndexSuiteBase extends FunSuite {
         writeDocuments(fsDir, docs: _*)
 
         // create the reader
-        val reader = IndexReader.open(fsDir)
+        val reader = DirectoryReader.open(fsDir)
 
         // produce the reader as the next item in the Traversable
         f(reader)
@@ -60,7 +62,7 @@ abstract class IndexSuiteBase extends FunSuite {
     for (doc <- docs) {
       val document = new Document
       for ((key, value) <- doc) {
-        document.add(new Field(key, value, Field.Store.YES, Field.Index.ANALYZED))
+        document.add(new TextField(key, value, Field.Store.YES))
       }
       writer.addDocument(document)
     }

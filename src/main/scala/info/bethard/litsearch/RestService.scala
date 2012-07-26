@@ -12,20 +12,22 @@ import java.io.File
 import org.apache.lucene.search.IndexSearcher
 import scala.collection.JavaConverters._
 import scala.xml.{ Elem, Node, Null, Text, TopScope }
+import org.apache.lucene.index.DirectoryReader
+import org.apache.lucene.index.ParallelCompositeReader
 
 object RestService extends RestHelper {
   private val logger = LoggerFactory.getLogger(this.getClass())
 
   // load configuration from properties
-  private def getDirectory(name: String): Directory = {
+  private def open(name: String): DirectoryReader = {
     val path = Props.get(name).failMsg("\"%s\" property missing".format(name)).open_!
-    FSDirectory.open(new File(path))
+    DirectoryReader.open(FSDirectory.open(new File(path)))
   }
 
-  val titleIndex = new TitleTextIndex(getDirectory("index.articles"))
-  val abstractIndex = new AbstractTextIndex(getDirectory("index.articles"))
-  val citationCountIndex = new CitationCountIndex(getDirectory("index.citation_count"))
-  val ageIndex = new AgeIndex(getDirectory("index.age"))
+  val titleIndex = new TitleTextIndex
+  val abstractIndex = new AbstractTextIndex
+  val citationCountIndex = new CitationCountIndex
+  val ageIndex = new AgeIndex(2012)
 
   serve {
     case Req("api" :: "literature-search" :: Nil, "xml", GetRequest | PostRequest) => {
@@ -47,30 +49,27 @@ object RestService extends RestHelper {
           this.ageIndex -> ageWeight)
 
         // open the index for searching
-        val reader = index.openReader()
+        val articlesReader = open("index.articles")
+        val citationCountReader = open("index.citation_count")
+        val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
         try {
+          // search for the given query
           val searcher = new IndexSearcher(reader)
-          try {
+          val topDocs = searcher.search(index.createQuery(queryPhrase), 10)
 
-            // search for the given query
-            val topDocs = searcher.search(index.createQuery(queryPhrase), 10)
-
-            // convert document results to XML
-            val articleElems = for (scoreDoc <- topDocs.scoreDocs) yield {
-              val doc = reader.document(scoreDoc.doc)
-              val fieldNames = doc.getFields.asScala.map(_.name).distinct
-              val fieldElems = for (fieldName <- fieldNames) yield {
-                Elem(null, fieldName, Null, TopScope, Text(doc.get(fieldName)))
-              }
-              Elem(null, "article", Null, TopScope, addNewlines(fieldElems): _*)
+          // convert document results to XML
+          val articleElems = for (scoreDoc <- topDocs.scoreDocs) yield {
+            val doc = reader.document(scoreDoc.doc)
+            val fieldNames = doc.getFields.asScala.map(_.name).distinct
+            val fieldElems = for (fieldName <- fieldNames) yield {
+              Elem(null, fieldName, Null, TopScope, Text(doc.get(fieldName)))
             }
-            Elem(null, "articles", Null, TopScope, addNewlines(articleElems): _*)
-
-            // close index
-          } finally {
-            searcher.close()
+            Elem(null, "article", Null, TopScope, addNewlines(fieldElems): _*)
           }
+          Elem(null, "articles", Null, TopScope, addNewlines(articleElems): _*)
+
         } finally {
+          // close index
           reader.close()
         }
       }

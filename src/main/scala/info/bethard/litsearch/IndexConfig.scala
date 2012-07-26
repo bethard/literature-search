@@ -1,15 +1,21 @@
 package info.bethard.litsearch
-import org.apache.lucene.analysis.PerFieldAnalyzerWrapper
-import org.apache.lucene.analysis.standard.StandardAnalyzer
 import scala.collection.JavaConverters._
-import org.apache.lucene.util.Version.{ LUCENE_36 => luceneVersion }
-import org.apache.lucene.analysis.KeywordAnalyzer
-import org.apache.lucene.analysis.WhitespaceAnalyzer
+import org.apache.lucene.util.Version.{ LUCENE_40 => luceneVersion }
 import org.apache.lucene.analysis.Analyzer
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.store.Directory
 import org.apache.lucene.index.IndexWriterConfig
-import org.apache.lucene.queryParser.QueryParser
+import org.apache.lucene.analysis.core.KeywordAnalyzer
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer
+import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
+import org.apache.lucene.analysis.standard.StandardAnalyzer
+import java.io.StringReader
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
+import org.apache.lucene.search.BooleanQuery
+import org.apache.lucene.search.TermQuery
+import org.apache.lucene.index.Term
+import org.apache.lucene.search.BooleanClause
+import org.apache.lucene.search.Query
 
 object IndexConfig {
   object FieldNames {
@@ -20,7 +26,6 @@ object IndexConfig {
     val citedArticleIDs = "CitedArticleIDs"
     val year = "Year"
     val citationCount = "CitationCount"
-    val age = "Age"
   }
 
   val analyzer = new PerFieldAnalyzerWrapper(
@@ -36,7 +41,15 @@ object IndexConfig {
     new IndexWriter(directory, config)
   }
 
-  def newQueryParser(defaultField: String): QueryParser = {
-    new QueryParser(luceneVersion, defaultField, this.analyzer)
+  def parseTermsQuery(fieldName: String, queryText: String): Query = {
+    val tokenStream = this.analyzer.tokenStream(fieldName, new StringReader(queryText))
+    val termAttribute = tokenStream.getAttribute(classOf[CharTermAttribute]);
+    val incrementIter = Iterator.continually(tokenStream.incrementToken)
+    val query = new BooleanQuery
+    while (tokenStream.incrementToken) {
+      val term = new Term(fieldName, termAttribute.toString)
+      query.add(new TermQuery(term), BooleanClause.Occur.SHOULD)
+    }
+    query
   }
 }
