@@ -1,7 +1,7 @@
 package info.bethard.litsearch
 
 import java.io.File
-import com.lexicalscope.jewel.cli.Option
+import com.lexicalscope.jewel.cli.{ Option => CliOption }
 import org.apache.lucene.store.FSDirectory
 import com.lexicalscope.jewel.cli.CliFactory
 import org.apache.lucene.search.IndexSearcher
@@ -13,29 +13,40 @@ import org.apache.lucene.search.BooleanQuery
 import scala.collection.JavaConverters._
 import org.apache.lucene.search.DefaultSimilarity
 import info.bethard.litsearch.IndexConfig.FieldNames
+import java.io.PrintWriter
 
 object LearnFeatureWeights {
 
   trait Options {
-    @Option(longName = Array("title-index"))
+    @CliOption(longName = Array("model-dir"), defaultValue = Array("target/model"))
+    def getModelDir: File
+
+    @CliOption(longName = Array("title-index"))
     def getTitleIndex: File
 
-    @Option(longName = Array("abstract-index"))
+    @CliOption(longName = Array("abstract-index"))
     def getAbstractIndex: File
 
-    @Option(longName = Array("citation-count-index"))
+    @CliOption(longName = Array("citation-count-index"))
     def getCitationCountIndex: File
 
-    @Option(longName = Array("age-index"))
+    @CliOption(longName = Array("age-index"))
     def getAgeIndex: File
 
-    @Option(longName = Array("n-hits"), defaultValue = Array("100"))
+    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
   }
 
   def main(args: Array[String]): Unit = {
     val options = CliFactory.parseArguments(classOf[Options], args: _*)
     val nHits = options.getNHits
+    val modelDir = options.getModelDir
+
+    // determine names for files in the model directory
+    if (!modelDir.exists) {
+      modelDir.mkdirs
+    }
+    val trainingDataFile = new File(options.getModelDir, "training-data.svmmap")
 
     // create indexes from command line parameters
     implicit def fileToDirectory(file: File) = FSDirectory.open(file)
@@ -59,39 +70,47 @@ object LearnFeatureWeights {
     })
 
     // generate one training example for each document in the index
+    val writer = new PrintWriter(trainingDataFile)
     for (doc <- 0 until reader.maxDoc) {
       println("QUERY: " + doc)
       val queryDocument = reader.document(doc)
 
-      // determine what articles were cited
-      val citedIds = queryDocument.get(FieldNames.citedArticleIDs).split("\\s+").toSet
+      // only use articles with an abstract and a bibliography
+      val citedIdsOption = Option(queryDocument.get(FieldNames.citedArticleIDs))
+      val abstractTextOption = Option(queryDocument.get(FieldNames.abstractText))
+      for (citedIdsString <- citedIdsOption; abstractText <- abstractTextOption) {
 
-      // create the query(ies) based on the abstract text
-      val queryText = QueryParser.escape(queryDocument.get(FieldNames.abstractText))
-      val query = index.createQuery(queryText)
-      val subQueries = indexes.map(_.createQuery(queryText))
+        // determine what articles were cited
+        val citedIds = citedIdsString.split("\\s+").toSet
 
-      // retrieve other articles based on the main query
-      for (scoreDoc <- searcher.search(query, nHits).scoreDocs) {
-        val resultDocument = reader.document(scoreDoc.doc)
-        val id = resultDocument.get(FieldNames.articleIDWhenCited)
+        // create the query(ies) based on the abstract text
+        val queryText = QueryParser.escape(abstractText)
+        val query = index.createQuery(queryText)
+        val subQueries = indexes.map(_.createQuery(queryText))
 
-        // determine the sub-scores for each sub-query
-        val subScores = subQueries.map { subQuery =>
-          val weight = searcher.createNormalizedWeight(subQuery)
-          val scorer = weight.scorer(reader, true, true)
-          scorer.advance(scoreDoc.doc)
-          scorer.score
+        // retrieve other articles based on the main query
+        for (scoreDoc <- searcher.search(query, nHits).scoreDocs) {
+          val resultDocument = reader.document(scoreDoc.doc)
+          val id = resultDocument.get(FieldNames.articleIDWhenCited)
+
+          // determine the sub-scores for each sub-query
+          val subScores = subQueries.map { subQuery =>
+            val weight = searcher.createNormalizedWeight(subQuery)
+            val scorer = weight.scorer(reader, true, true)
+            scorer.advance(scoreDoc.doc)
+            scorer.score
+          }
+
+          // generate SVM-style label and feature string
+          val label = if (citedIds.contains(id)) "+1" else "-1"
+          val features = subScores.zipWithIndex.map {
+            case (score, index) => "%d:%f".format(index, score)
+          }
+          writer.printf("%s %s\n", label, features.mkString(" "))
         }
-
-        // generate SVM-style label and feature string
-        val label = if (citedIds.contains(id)) "+1" else "-1"
-        val features = subScores.zipWithIndex.map {
-          case (score, index) => "%d:%f".format(index, score)
-        }
-        printf("%s %s\n", label, features.mkString(" "))
       }
     }
+    writer.close
 
     // close the searcher and reader
     searcher.close
