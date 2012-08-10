@@ -16,8 +16,9 @@ import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-
+import scala.sys.process.Process
 import info.bethard.litsearch.IndexConfig.FieldNames
+import scala.sys.process.ProcessIO
 
 object LearnFeatureWeights {
 
@@ -33,6 +34,9 @@ object LearnFeatureWeights {
 
     @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
+
+    @CliOption(longName = Array("svm-map-dir"))
+    def getSvmMapDir: File
   }
 
   def main(args: Array[String]): Unit = {
@@ -44,7 +48,11 @@ object LearnFeatureWeights {
     if (!modelDir.exists) {
       modelDir.mkdirs
     }
-    val trainingDataFile = new File(options.getModelDir, "training-data.svmmap")
+    val trainingDataIndexFile = new File(options.getModelDir, "training-data.svmmap-index")
+    val trainingDataDir = new File(options.getModelDir, "training-data")
+    if (!trainingDataDir.exists) {
+      trainingDataDir.mkdir
+    }
 
     // create indexes from command line parameters
     val titleIndex = new TitleTextIndex
@@ -73,15 +81,19 @@ object LearnFeatureWeights {
     val lineFormat = "%s qid:%d %s"
 
     // generate one training example for each document in the index
-    val writer = new PrintWriter(trainingDataFile)
+    val trainingDataIndexWriter = new PrintWriter(trainingDataIndexFile)
     for (doc <- 0 until reader.maxDoc) {
       println("QUERY: " + doc)
-      val queryDocument = reader.document(doc)
 
       // only use articles with an abstract and a bibliography
+      val queryDocument = reader.document(doc)
       val citedIdsOption = Option(queryDocument.get(FieldNames.citedArticleIDs))
       val abstractTextOption = Option(queryDocument.get(FieldNames.abstractText))
       for (citedIdsString <- citedIdsOption; abstractText <- abstractTextOption) {
+
+        // prepare to write SVM-MAP files
+        val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
+        val trainingDataWriter = new PrintWriter(trainingDataFile)
 
         // determine what articles were cited
         val citedIds = citedIdsString.split("\\s+").toSet
@@ -92,21 +104,53 @@ object LearnFeatureWeights {
         // retrieve other articles based on the main query
         val collector = new DocScoresCollector(nHits)
         searcher.search(query, collector)
-        for (docScores <- collector.getDocSubScores) {
+        val labels = for (docScores <- collector.getDocSubScores) yield {
           val resultDocument = reader.document(docScores.doc)
           val id = resultDocument.get(FieldNames.articleIDWhenCited)
 
           // generate SVM-style label and feature string
           val label = if (citedIds.contains(id)) "+1" else "-1"
           val featuresString = featureFormat.format(docScores.subScores: _*)
-          writer.println(lineFormat.format(label, doc, featuresString))
+          trainingDataWriter.println(lineFormat.format(label, doc, featuresString))
+          label
         }
+
+        // only add the file for training if there are both positive and negative examples
+        if (labels.toSet.size == 2) {
+          trainingDataIndexWriter.println(trainingDataFile.getAbsolutePath)
+          trainingDataIndexWriter.flush
+        }
+
+        // close the writer
+        trainingDataWriter.close
       }
     }
-    writer.close
+    trainingDataIndexWriter.close
 
     // close the reader
     reader.close
+
+    // train the model
+    val modelFile = new File(options.getModelDir, "model.svmmap")
+    val svmMap = Process(
+      Seq(
+        new File(options.getSvmMapDir, "svm_map_learn").getPath,
+        "-c", "10",
+        trainingDataIndexFile.getPath,
+        modelFile.getPath),
+      None,
+      "PYTHONPATH" -> options.getSvmMapDir.getPath)
+    svmMap.!
+    println("Training complete!")
+
+    val getWeights = Process(Seq(
+      "python", "-c",
+      """import pickle; """ +
+        """SVMBlank = type("SVMBlank", (), {}); """ +
+        """model = pickle.load(open("%s")); """.format(modelFile) +
+        """print " ".join(map(str, model.w))"""))
+    val newWeights = getWeights.lines.mkString.split("\\s+").map(_.toDouble)
+    println(newWeights.toList)
   }
 }
 
