@@ -19,6 +19,7 @@ import scala.collection.mutable.Buffer
 import scala.sys.process.Process
 import info.bethard.litsearch.IndexConfig.FieldNames
 import scala.sys.process.ProcessIO
+import java.util.logging.Logger
 
 object LearnFeatureWeights {
 
@@ -34,6 +35,9 @@ object LearnFeatureWeights {
 
     @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
+
+    @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
+    def getNIterations: Int
 
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
@@ -62,34 +66,34 @@ object LearnFeatureWeights {
 
     // create main index as weighted sum of other indexes 
     val indexes = Seq(titleIndex, abstractIndex, citationCountIndex, ageIndex)
-    val weights = Seq(1f, 1f, 0.1f, 0.1f)
-    val index = new CombinedIndex(indexes zip weights: _*)
+    var weights = Seq(1f, 1f, 0f, 0f)
+    for (i <- 1 to options.getNIterations) {
+      val index = new CombinedIndex(indexes zip weights: _*)
 
-    // open the reader and searcher
-    val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
-    val citationCountReader = DirectoryReader.open(FSDirectory.open(options.getCitationCountIndex))
-    val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
-    val searcher = new IndexSearcher(reader)
+      // open the reader and searcher
+      val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
+      val citationCountReader = DirectoryReader.open(FSDirectory.open(options.getCitationCountIndex))
+      val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
+      val searcher = new IndexSearcher(reader)
 
-    // get rid of the query norm so that scores are directly interpretable
-    searcher.setSimilarity(new DefaultSimilarity {
-      override def queryNorm(sumOfSquaredWeights: Float) = 1f
-    })
+      // get rid of the query norm so that scores are directly interpretable
+      searcher.setSimilarity(new DefaultSimilarity {
+        override def queryNorm(sumOfSquaredWeights: Float) = 1f
+      })
 
-    // prepare for writing output
-    val featureFormat = (1 to weights.size).map(_ + ":%f").mkString(" ")
-    val lineFormat = "%s qid:%d %s"
+      // prepare for writing output
+      val featureFormat = (0 until weights.size).map(_ + ":%f").mkString(" ")
+      val lineFormat = "%s qid:%d %s"
 
-    // generate one training example for each document in the index
-    val trainingDataIndexWriter = new PrintWriter(trainingDataIndexFile)
-    for (doc <- 0 until reader.maxDoc) {
-      println("QUERY: " + doc)
-
-      // only use articles with an abstract and a bibliography
-      val queryDocument = reader.document(doc)
-      val citedIdsOption = Option(queryDocument.get(FieldNames.citedArticleIDs))
-      val abstractTextOption = Option(queryDocument.get(FieldNames.abstractText))
-      for (citedIdsString <- citedIdsOption; abstractText <- abstractTextOption) {
+      // generate one training example for each document in the index
+      val trainingDataIndexWriter = new PrintWriter(trainingDataIndexFile)
+      val averagePrecisions = for {
+        doc <- 0 until reader.maxDoc
+        queryDocument = reader.document(doc)
+        // only use articles with an abstract and a bibliography
+        citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs))
+        abstractText <- Option(queryDocument.get(FieldNames.abstractText))
+      } yield {
 
         // prepare to write SVM-MAP files
         val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
@@ -115,43 +119,50 @@ object LearnFeatureWeights {
           label
         }
 
+        // close the writer
+        trainingDataWriter.close
+        if ((doc + 1) % 100 == 0) {
+          this.logger.info("Wrote training data for %d articles".format(doc + 1))
+        }
+
         // only add the file for training if there are both positive and negative examples
         if (labels.toSet.size == 2) {
           trainingDataIndexWriter.println(trainingDataFile.getAbsolutePath)
           trainingDataIndexWriter.flush
         }
 
-        // close the writer
-        trainingDataWriter.close
+        // calculate and yield the average precision
+        val relevantRanks =
+          for ((label, rank) <- labels.zipWithIndex; if label == "+1") yield rank
+        val precisions =
+          for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
+        precisions.sum / citedIds.size
       }
-    }
-    trainingDataIndexWriter.close
+      // close the reader and index writer
+      reader.close
+      trainingDataIndexWriter.close
 
-    // close the reader
-    reader.close
+      // log the mean average precision
+      this.logger.info("MAP: %.3f".format(averagePrecisions.sum / averagePrecisions.size))
 
-    // train the model
-    val modelFile = new File(options.getModelDir, "model.svmmap")
-    val svmMap = Process(
-      Seq(
-        new File(options.getSvmMapDir, "svm_map_learn").getPath,
-        "-c", "10",
-        trainingDataIndexFile.getPath,
-        modelFile.getPath),
-      None,
-      "PYTHONPATH" -> options.getSvmMapDir.getPath)
-    svmMap.!
-    println("Training complete!")
+      // train the model
+      val modelFile = new File(options.getModelDir, "model.svmmap")
+      val svmMapPath = new File(options.getSvmMapDir, "svm_map_learn").getPath
+      val svmMapCommand = Seq(svmMapPath, "-c", "1000", trainingDataIndexFile.getPath, modelFile.getPath)
+      val svmMap = Process(svmMapCommand, None, "PYTHONPATH" -> options.getSvmMapDir.getPath)
+      svmMap.!
 
-    val getWeights = Process(Seq(
-      "python", "-c",
-      """import pickle; """ +
+      val printWeightsCommand = """import pickle; """ +
         """SVMBlank = type("SVMBlank", (), {}); """ +
         """model = pickle.load(open("%s")); """.format(modelFile) +
-        """print " ".join(map(str, model.w))"""))
-    val newWeights = getWeights.lines.mkString.split("\\s+").map(_.toDouble)
-    println(newWeights.toList)
+        """print " ".join(map(str, model.w))"""
+      val output = Process(Seq("python", "-c", printWeightsCommand)).lines.mkString
+      weights = output.split("\\s+").map(_.toFloat).toSeq
+      this.logger.info("Current weights: " + weights)
+    }
   }
+
+  val logger = Logger.getLogger(this.getClass.getName)
 }
 
 case class DocScores(doc: Int, score: Float, subScores: Seq[Float])
