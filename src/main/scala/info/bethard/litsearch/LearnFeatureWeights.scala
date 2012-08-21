@@ -64,17 +64,17 @@ object LearnFeatureWeights {
     val citationCountIndex = new CitationCountIndex
     val ageIndex = new AgeIndex(2012)
 
+    // open the reader and searcher
+    val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
+    val citationCountReader = DirectoryReader.open(FSDirectory.open(options.getCitationCountIndex))
+    val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
+    val searcher = new IndexSearcher(reader)
+
     // create main index as weighted sum of other indexes 
     val indexes = Seq(titleIndex, abstractIndex, citationCountIndex, ageIndex)
     var weights = Seq(1f, 1f, 0f, 0f)
     for (i <- 1 to options.getNIterations) {
       val index = new CombinedIndex(indexes zip weights: _*)
-
-      // open the reader and searcher
-      val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
-      val citationCountReader = DirectoryReader.open(FSDirectory.open(options.getCitationCountIndex))
-      val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
-      val searcher = new IndexSearcher(reader)
 
       // get rid of the query norm so that scores are directly interpretable
       searcher.setSimilarity(new DefaultSimilarity {
@@ -138,8 +138,7 @@ object LearnFeatureWeights {
           for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
         precisions.sum / citedIds.size
       }
-      // close the reader and index writer
-      reader.close
+      // close the index writer
       trainingDataIndexWriter.close
 
       // log the mean average precision
@@ -160,6 +159,9 @@ object LearnFeatureWeights {
       weights = output.split("\\s+").map(_.toFloat).toSeq
       this.logger.info("Current weights: " + weights)
     }
+
+    // close the reader
+    reader.close
   }
 
   val logger = Logger.getLogger(this.getClass.getName)
