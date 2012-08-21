@@ -25,13 +25,13 @@ class CombinedIndex(indexWeights: (Index, Float)*) extends Index {
 }
 
 object CombinedIndex {
-  // hackery to get child scorer not returned by getChildren
-  val scorerClass = Class.forName("org.apache.lucene.queries.function.BoostedQuery$CustomScorer")
-  val boostedScorerField = scorerClass.getDeclaredField("scorer")
-  boostedScorerField.setAccessible(true)
-  def getBoostedScorer(scorer: Scorer) = this.boostedScorerField.get(scorer).asInstanceOf[Scorer]
-
   def extractSubScorers(scorer: Scorer): Seq[Scorer] = {
-    scorer.getChildren.asScala.map(childScorer => getBoostedScorer(childScorer.child)).toList
+    val subScorers = for {
+      boostedChildScorer <- scorer.getChildren.iterator.asScala
+      subChildScorer <- boostedChildScorer.child.getChildren.iterator.asScala
+    } yield {
+      subChildScorer.child
+    }
+    subScorers.toList
   }
 }
