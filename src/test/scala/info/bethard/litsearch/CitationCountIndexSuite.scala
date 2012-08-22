@@ -21,8 +21,7 @@ class CitationCountIndexSuite extends IndexSuiteBase {
     } {
 
       // construct the index of citation counts
-      val index = new CitationCountIndex
-      index.buildFrom(tempReader, tempDir)
+      CitationCountIndex.buildFrom(tempReader, tempDir)
 
       // check the values of the citation counts
       val reader = DirectoryReader.open(tempDir)
@@ -48,10 +47,10 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       tempDir <- this.temporaryFSDirectory
     } {
       // construct the index of citation counts
-      val index = new CitationCountIndex
-      index.buildFrom(tempReader, tempDir)
+      CitationCountIndex.buildFrom(tempReader, tempDir)
 
       // check the values of the citation counts
+      val index = new CitationCountIndex
       val reader = DirectoryReader.open(tempDir)
       val searcher = new IndexSearcher(reader)
       val query = index.createQuery(null) // shouldn't use query text

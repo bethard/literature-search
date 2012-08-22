@@ -20,11 +20,10 @@ class CombinedIndexSuite extends IndexSuiteBase {
         Seq( /* test missing ID */ year -> "2002", citedArticleIDs -> "1 2"))
       citationCountIndexDirectory <- this.temporaryFSDirectory
     } {
-
       // construct the index of citation counts
-      val citationCountIndex = new CitationCountIndex
-      citationCountIndex.buildFrom(tempReader, citationCountIndexDirectory)
+      CitationCountIndex.buildFrom(tempReader, citationCountIndexDirectory)
       val citationCountReader = DirectoryReader.open(citationCountIndexDirectory)
+      val citationCountIndex = new CitationCountIndex
 
       // construct the index of age counts
       val ageIndex = new AgeIndex(2012)
