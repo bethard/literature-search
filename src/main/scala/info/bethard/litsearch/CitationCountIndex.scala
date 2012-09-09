@@ -14,6 +14,11 @@ import com.lexicalscope.jewel.cli.{ Option => CliOption }
 import com.lexicalscope.jewel.cli.CliFactory
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.index.DirectoryReader
+import org.apache.lucene.search.Collector
+import scala.collection.mutable.Buffer
+import org.apache.lucene.search.Scorer
+import org.apache.lucene.index.AtomicReaderContext
+import org.apache.lucene.search.TotalHitCountCollector
 
 class CitationCountIndex extends Index {
 
@@ -24,14 +29,9 @@ class CitationCountIndex extends Index {
 
 object CitationCountIndex {
 
-  // set a maximum number of citations, or Lucene spends too much time creating HitQueues
-  final val maxCitations = 100000
-
   def buildFrom(articleIndexReader: IndexReader, citationCountIndexDirectory: Directory): Unit = {
     // total number of documents in the index
     val maxDoc = articleIndexReader.maxDoc
-    // number of citing articles to retrieve
-    val nHits = math.min(this.maxCitations, maxDoc)
     // reporting increment - report progress 1000 times
     val incr = math.pow(10, math.floor(math.log10(maxDoc / 1000)))
     // function to parse an article ID into a query for citing articles
@@ -54,8 +54,11 @@ object CitationCountIndex {
         // query for citing articles and count them
         val document = articleIndexSearcher.doc(i)
         val articleIDWhenCited = document.get(IndexConfig.FieldNames.articleIDWhenCited)
-        val citationCountOption = Option(articleIDWhenCited).map(id =>
-          articleIndexSearcher.search(getIDsQuery(id), nHits).totalHits)
+        val citationCountOption = Option(articleIDWhenCited).map(id => {
+          val collector = new TotalHitCountCollector
+          articleIndexSearcher.search(getIDsQuery(id), collector)
+          collector.getTotalHits
+        })
 
         // add a document field with the citation count
         val doc = new Document
