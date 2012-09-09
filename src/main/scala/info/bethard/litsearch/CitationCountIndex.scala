@@ -41,11 +41,14 @@ object CitationCountIndex {
     val citationCountIndexWriter = IndexConfig.newIndexWriter(citationCountIndexDirectory)
     try {
       val articleIndexSearcher = new IndexSearcher(articleIndexReader)
+      var time = System.nanoTime
       for (i <- 0 until maxDoc) {
 
         // report progress
         if (i % incr == 0) {
-          System.err.println("indexed: %d/%d".format(i, maxDoc))
+          val elapsedSeconds = (System.nanoTime - time) / 1e9
+          System.err.println("indexed: %d/%d (%.1f seconds)".format(i, maxDoc, elapsedSeconds))
+          time = System.nanoTime
         }
 
         // query for citing articles and count them
