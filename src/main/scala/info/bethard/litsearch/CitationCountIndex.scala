@@ -24,18 +24,37 @@ class CitationCountIndex extends Index {
 
 object CitationCountIndex {
 
+  // set a maximum number of citations, or Lucene spends too much time creating HitQueues
+  final val maxCitations = 100000
+
   def buildFrom(articleIndexReader: IndexReader, citationCountIndexDirectory: Directory): Unit = {
+    // total number of documents in the index
+    val maxDoc = articleIndexReader.maxDoc
+    // number of citing articles to retrieve
+    val nHits = math.min(this.maxCitations, maxDoc)
+    // reporting increment - report progress 1000 times
+    val incr = math.pow(10, math.floor(math.log10(maxDoc / 1000)))
+    // function to parse an article ID into a query for citing articles
+    val getIDsQuery = IndexConfig.parseTermsQuery(IndexConfig.FieldNames.citedArticleIDs, _: String)
+
+    // create index of citation count for each article
     val citationCountIndexWriter = IndexConfig.newIndexWriter(citationCountIndexDirectory)
     try {
-      val maxDoc = articleIndexReader.maxDoc
       val articleIndexSearcher = new IndexSearcher(articleIndexReader)
-      val getIDsQuery = IndexConfig.parseTermsQuery(IndexConfig.FieldNames.citedArticleIDs, _: String)
       for (i <- 0 until maxDoc) {
+
+        // report progress
+        if (i % incr == 0) {
+          System.err.println("indexed: %d/%d".format(i, maxDoc))
+        }
+
+        // query for citing articles and count them
         val document = articleIndexSearcher.doc(i)
         val articleIDWhenCited = document.get(IndexConfig.FieldNames.articleIDWhenCited)
         val citationCountOption = Option(articleIDWhenCited).map(id =>
-          articleIndexSearcher.search(getIDsQuery(id), maxDoc).totalHits)
+          articleIndexSearcher.search(getIDsQuery(id), nHits).totalHits)
 
+        // add a document field with the citation count
         val doc = new Document
         doc.add(new TextField(
           IndexConfig.FieldNames.citationCount,
