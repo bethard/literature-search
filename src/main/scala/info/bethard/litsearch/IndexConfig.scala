@@ -1,21 +1,25 @@
 package info.bethard.litsearch
+
+import java.io.StringReader
+
 import scala.collection.JavaConverters._
-import org.apache.lucene.util.Version.{ LUCENE_40 => luceneVersion }
+
 import org.apache.lucene.analysis.Analyzer
-import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.store.Directory
-import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.analysis.core.KeywordAnalyzer
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer
+import org.apache.lucene.analysis.en.EnglishAnalyzer
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
 import org.apache.lucene.analysis.standard.StandardAnalyzer
-import java.io.StringReader
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.lucene.search.BooleanQuery
-import org.apache.lucene.search.TermQuery
+import org.apache.lucene.index.IndexWriter
+import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.index.Term
 import org.apache.lucene.search.BooleanClause
+import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Query
+import org.apache.lucene.search.TermQuery
+import org.apache.lucene.store.Directory
+import org.apache.lucene.util.Version.{ LUCENE_40 => luceneVersion }
 
 object IndexConfig {
   object FieldNames {
@@ -31,7 +35,7 @@ object IndexConfig {
   val analyzer = new PerFieldAnalyzerWrapper(
     new StandardAnalyzer(luceneVersion),
     Map[String, Analyzer](
-      FieldNames.abstractText -> new StandardAnalyzer(luceneVersion),
+      FieldNames.abstractText -> new EnglishAnalyzer(luceneVersion),
       FieldNames.citedArticleIDs -> new WhitespaceAnalyzer(luceneVersion),
       FieldNames.citationCount -> new KeywordAnalyzer).asJava)
 
