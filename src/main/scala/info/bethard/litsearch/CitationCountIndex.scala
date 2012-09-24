@@ -19,11 +19,22 @@ import scala.collection.mutable.Buffer
 import org.apache.lucene.search.Scorer
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.search.TotalHitCountCollector
+import org.apache.lucene.queries.function.valuesource.SimpleFloatFunction
+import org.apache.lucene.queries.function.ValueSource
+import org.apache.lucene.queries.function.FunctionValues
 
 class CitationCountIndex extends Index {
 
   override def createQuery(queryText: String): Query = {
-    new FunctionQuery(new IntFieldSource(IndexConfig.FieldNames.citationCount))
+    new FunctionQuery(new LogFloatFunction(new IntFieldSource(IndexConfig.FieldNames.citationCount)))
+  }
+}
+
+class LogFloatFunction(source: ValueSource) extends SimpleFloatFunction(source) {
+  override def name: String = "log"
+  override def func(doc: Int, vals: FunctionValues): Float = {
+    val value = vals.doubleVal(doc)
+    if (value == 0.0) 0.0f else math.log(value).toFloat
   }
 }
 
