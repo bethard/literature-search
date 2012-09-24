@@ -22,6 +22,8 @@ import scala.sys.process.ProcessIO
 import java.util.logging.Logger
 import com.google.common.io.Files
 import java.io.FileWriter
+import com.google.common.base.Charsets
+import java.io.BufferedWriter
 
 object LearnFeatureWeights {
 
@@ -38,8 +40,14 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
 
-    @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
+    @CliOption(longName = Array("n-iterations"), defaultValue = Array("100"))
     def getNIterations: Int
+
+    @CliOption(longName = Array("min-references"), defaultValue = Array("20"))
+    def getMinReferences: Int
+
+    @CliOption(longName = Array("max-articles"), defaultValue = Array("100"))
+    def getMaxArticles: Int
 
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
@@ -75,13 +83,32 @@ object LearnFeatureWeights {
     // determine the documents for training
     val queryString = options.getQuery
     val topDocs = searcher.search(abstractIndex.createQuery(queryString), reader.maxDoc)
-    val docs = topDocs.scoreDocs.map(_.doc)
+    val docs = topDocs.scoreDocs.iterator.map(_.doc).filter { docID =>
+      val document = reader.document(docID)
+      Option(document.get(FieldNames.citedArticleIDs)) match {
+        case None => false
+        case Some(citedIDsString) => {
+          val hasReferences = citedIDsString.split("\\s+").toSet.size > options.getMinReferences
+          val hasCitations = document.get(FieldNames.citationCount).toInt > 5
+          hasReferences && hasCitations
+        }
+      }
+    }.take(options.getMaxArticles).toSeq
     this.logger.info("Found %d documents with \"%s\" in the abstract".format(docs.size, queryString))
+
+    // remove any existing training data files
+    for (iteration <- 1 to options.getNIterations) {
+      val trainingDataIndexFile = getTrainingDataIndexFile(iteration)
+      if (trainingDataIndexFile.exists()) {
+        trainingDataIndexFile.delete()
+      }
+    }
 
     // create main index as weighted sum of other indexes 
     val indexes = Seq(titleIndex, abstractIndex, citationCountIndex, ageIndex)
     var weights = Seq(1f, 1f, 0f, 0f)
     for (iteration <- 1 to options.getNIterations) {
+      this.logger.info("Current weights: " + weights)
       val index = new CombinedIndex(indexes zip weights: _*)
 
       // get rid of the query norm so that scores are directly interpretable
@@ -93,20 +120,19 @@ object LearnFeatureWeights {
       val featureFormat = (0 until weights.size).map(_ + ":%f").mkString(" ")
       val lineFormat = "%s qid:%d %s"
 
-      // copy examples from previous iterations before adding examples from this iteration
+      // prepare directory for svm files
       val trainingDataDir = new File(options.getModelDir, "training-data-" + iteration)
       if (!trainingDataDir.exists) {
         trainingDataDir.mkdir
       }
+
+      // prepare index of svm files (starting with index from previous iteration)
       val trainingDataIndexFile = getTrainingDataIndexFile(iteration)
-      val appendPreviousExamples = iteration > 1
-      if (appendPreviousExamples) {
+      if (iteration > 1) {
         Files.copy(getTrainingDataIndexFile(iteration - 1), trainingDataIndexFile)
       }
 
       // generate one training example for each document in the index
-      val trainingDataIndexWriter = new PrintWriter(new FileWriter(
-        trainingDataIndexFile, appendPreviousExamples))
       var nWritten = 0
       val averagePrecisions = for {
         doc <- docs
@@ -142,15 +168,14 @@ object LearnFeatureWeights {
 
         // close the writer
         trainingDataWriter.close
-        nWritten += 1
-        if (nWritten % 100 == 0) {
-          this.logger.info("Wrote training data for %d articles".format(nWritten))
-        }
 
         // only add the file for training if there are both positive and negative examples
         if (labels.toSet.size == 2) {
-          trainingDataIndexWriter.println(trainingDataFile.getAbsolutePath)
-          trainingDataIndexWriter.flush
+          nWritten += 1
+          val trainingDataIndexWriter = new FileWriter(trainingDataIndexFile, true)
+          trainingDataIndexWriter.write(trainingDataFile.getAbsolutePath)
+          trainingDataIndexWriter.write('\n')
+          trainingDataIndexWriter.close
         }
 
         // calculate and yield the average precision
@@ -160,18 +185,17 @@ object LearnFeatureWeights {
           for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
         precisions.sum / citedIds.size
       }
-      // close the index writer
-      trainingDataIndexWriter.close
 
       // log the mean average precision
       this.logger.info("MAP: %.4f".format(averagePrecisions.sum / averagePrecisions.size))
+      this.logger.info("Added %d training examples".format(nWritten))
 
       // train the model
-      val modelFile = new File(options.getModelDir, "model.svmmap")
+      val modelFile = new File(options.getModelDir, "model-%d.svmmap".format(iteration))
       val svmMapPath = new File(options.getSvmMapDir, "svm_map_learn").getPath
-      val svmMapCommand = Seq(svmMapPath, "-c", "1", trainingDataIndexFile.getPath, modelFile.getPath)
+      val svmMapCommand = Seq(svmMapPath, "-c", "100", trainingDataIndexFile.getPath, modelFile.getPath)
       val svmMap = Process(svmMapCommand, None, "PYTHONPATH" -> options.getSvmMapDir.getPath)
-      svmMap.!
+      svmMap.!!
 
       val printWeightsCommand = """import pickle; """ +
         """SVMBlank = type("SVMBlank", (), {}); """ +
@@ -179,8 +203,8 @@ object LearnFeatureWeights {
         """print " ".join(map(str, model.w))"""
       val output = Process(Seq("python", "-c", printWeightsCommand)).lines.mkString
       weights = output.split("\\s+").map(_.toFloat).toSeq
-      this.logger.info("Current weights: " + weights)
     }
+    this.logger.info("Final weights: " + weights)
 
     // close the reader
     reader.close
