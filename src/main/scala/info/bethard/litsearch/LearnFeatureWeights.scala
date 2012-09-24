@@ -43,14 +43,20 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("n-iterations"), defaultValue = Array("100"))
     def getNIterations: Int
 
-    @CliOption(longName = Array("min-references"), defaultValue = Array("20"))
-    def getMinReferences: Int
-
-    @CliOption(longName = Array("max-articles"), defaultValue = Array("100"))
+    @CliOption(longName = Array("max-articles"), defaultValue = Array("50"))
     def getMaxArticles: Int
+
+    @CliOption(longName = Array("min-article-references"), defaultValue = Array("20"))
+    def getMinArticleReferences: Int
+
+    @CliOption(longName = Array("min-article-citation-count"), defaultValue = Array("20"))
+    def getMinArticleCitationCount: Int
 
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
+
+    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1"))
+    def getSvmMapCost: Int
 
     @CliOption(longName = Array("query"), defaultValue = Array("premature"))
     def getQuery: String
@@ -88,8 +94,8 @@ object LearnFeatureWeights {
       Option(document.get(FieldNames.citedArticleIDs)) match {
         case None => false
         case Some(citedIDsString) => {
-          val hasReferences = citedIDsString.split("\\s+").toSet.size > options.getMinReferences
-          val hasCitations = document.get(FieldNames.citationCount).toInt > 5
+          val hasReferences = citedIDsString.split("\\s+").toSet.size >= options.getMinArticleReferences
+          val hasCitations = document.get(FieldNames.citationCount).toInt >= options.getMinArticleCitationCount
           hasReferences && hasCitations
         }
       }
@@ -188,12 +194,16 @@ object LearnFeatureWeights {
 
       // log the mean average precision
       this.logger.info("MAP: %.4f".format(averagePrecisions.sum / averagePrecisions.size))
+      if (nWritten == 0) {
+        throw new Exception("No new training examples found")
+      }
       this.logger.info("Added %d training examples".format(nWritten))
 
       // train the model
       val modelFile = new File(options.getModelDir, "model-%d.svmmap".format(iteration))
       val svmMapPath = new File(options.getSvmMapDir, "svm_map_learn").getPath
-      val svmMapCommand = Seq(svmMapPath, "-c", "100", trainingDataIndexFile.getPath, modelFile.getPath)
+      val cost = options.getSvmMapCost.toString
+      val svmMapCommand = Seq(svmMapPath, "-c", cost, trainingDataIndexFile.getPath, modelFile.getPath)
       val svmMap = Process(svmMapCommand, None, "PYTHONPATH" -> options.getSvmMapDir.getPath)
       svmMap.!!
 
