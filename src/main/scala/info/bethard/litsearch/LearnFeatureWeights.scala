@@ -213,6 +213,8 @@ object LearnFeatureWeights {
         """print " ".join(map(str, model.w))"""
       val output = Process(Seq("python", "-c", printWeightsCommand)).lines.mkString
       weights = output.split("\\s+").map(_.toFloat).toSeq
+      val maxWeight = weights.max
+      weights = weights.map(_ / maxWeight)
     }
     this.logger.info("Final weights: " + weights)
 
