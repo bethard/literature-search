@@ -25,6 +25,8 @@ object IndexConfig {
   object FieldNames {
     val abstractText = "AbstractText"
     val titleText = "Title"
+    val sourceTitleText = "SourceTitle"
+    val authors = "Authors"
     val articleID = "ID"
     val articleIDWhenCited = "IDWhenCited"
     val citedArticleIDs = "CitedArticleIDs"
@@ -33,9 +35,8 @@ object IndexConfig {
   }
 
   val analyzer = new PerFieldAnalyzerWrapper(
-    new StandardAnalyzer(luceneVersion),
+    new EnglishAnalyzer(luceneVersion),
     Map[String, Analyzer](
-      FieldNames.abstractText -> new EnglishAnalyzer(luceneVersion),
       FieldNames.citedArticleIDs -> new WhitespaceAnalyzer(luceneVersion),
       FieldNames.citationCount -> new KeywordAnalyzer).asJava)
 

@@ -1,3 +1,2 @@
-index.articles = /Users/bethard/Code/literature-search/index/stanford/articles
-index.citation_count = /Users/bethard/Code/literature-search/index/stanford-articles-citation-count
-index.age = /Users/bethard/Code/literature-search/index/stanford-articles-age-2012
+index.articles = /Users/bethard/Code/literature-search/index/isi-articles
+index.citation_count = /Users/bethard/Code/literature-search/index/isi-articles-citation-count

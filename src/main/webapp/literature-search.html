@@ -1,13 +1,101 @@
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:lift="http://liftweb.net/">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <meta name="description" content="" />
+    <meta name="keywords" content="" />
+    <title>Literature Search Demo</title>
+    <style class="lift:CSS.blueprint"></style>
+    <style class="lift:CSS.fancyType"></style>
+    <script id="jquery" src="/classpath/jquery.js" type="text/javascript"></script>
+    <script id="json" src="/classpath/json.js" type="text/javascript"></script>
+    <style type="text/css">
+    /* <![CDATA[ */
+    body {
+    	margin: 2em;
+    }
+	#search-query {
+		padding-right: 2em;
+		float: left;
+	}
+	#search-query input,img {
+		margin-left: auto;
+		margin-right: auto;
+		margin-bottom: 1em;
+		display: block;
+	}
+	#search-query div {
+		text-align: center;
+	}
+	#search-weights {
+		float: left;
+	}
+	#results {
+		clear: both;
+		padding-top: 2em;
+	}
+	#more {
+		display: none;
+	}
+	#ajax-loader {
+		display: none;
+	}
+	.lift_error {
+	  color: red;
+	  list-style:none;
+	  display: inline;
+	}
+	.edit_error_class {
+ 	 display: block;
+ 	 color: red;
+	}
+    /* ]]> */
+	</style>
+</head>
 <body>
-<form action="api/literature-search.xml" method="post">
-<p>Query: <input type="text" name="query" size="80" /></p>
-<p>Weights:</p>
-<p><input type="text" name="weight_title" size="4" value="1" /> Title</p>
-<p><input type="text" name="weight_abstract" size="4" value="1" /> Abstract</p>
-<p><input type="text" name="weight_age" size="4" value="-1" /> Age</p>
-<p><input type="text" name="weight_citation_count" size="4" value="0.5" /> Citations</p>
-<p><input type="submit" value="Submit" /></p>
+
+<h1>Literature Search Demo</h1>
+
+<div>
+<form class="lift:form.ajax">
+<div class="lift:LiteratureSearch">
+
+<div id="search-query">
+<input type="text" id="query" name="query" size="80" />
+<input type="submit" value="Search the Web of Knowledge" />
+<input type="hidden" name="verify" />
+<img alt="" id="ajax-loader" src="/images/ajax-loader.gif"/>
+</div>
+
+<div id="search-weights">
+<div>
+<input type="text" size="4" name="weight-title" />
+<label for="weight-title">Title text weight</label>
+<span class="lift:Msg?id=title-error&errorClass=error;">error</span>
+</div>
+<div>
+<input type="text" size="4" name="weight-abstract" />
+<label for="weight-abstract">Abstract text weight</label>
+<span class="lift:Msg?id=abstract-error&errorClass=error;">error</span>
+</div>
+<div>
+<input type="text" size="4" name="weight-citation-count" />
+<label for="weight-citation-count">Citation count weight</label>
+<span class="lift:Msg?id=citation-count-error&errorClass=error;">error</span>
+</div>
+<div>
+<input type="text" size="4" name="weight-age" />
+<label for="weight-age">Article age weight</label>
+<span class="lift:Msg?id=age-error&errorClass=error;">error</span>
+</div>
+</div>
+
+
+<div id="results"></div>
+<input type="submit" id="more" value="" />
+
+</div>
 </form>
+</div>
+
 </body>
 </html>
