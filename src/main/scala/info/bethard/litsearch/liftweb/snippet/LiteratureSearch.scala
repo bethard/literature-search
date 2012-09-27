@@ -46,9 +46,9 @@ object LiteratureSearch {
     // variables that will be loaded from the HTML form inputs
     var query = ""
     var nHits = 10
-    var textWeight = "1.0"
-    var citationCountWeight = "0.5"
-    var ageWeight = "-0.1"
+    var textWeight = "0.47"
+    var citationCountWeight = "1.0"
+    var ageWeight = "-0.12"
     var topDocs: TopDocs = null
 
     // verify input values, and then return JavaScript that will post the results 

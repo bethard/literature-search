@@ -15,6 +15,7 @@
     }
 	#search-query {
 		padding-right: 2em;
+		padding-top: 1.5em;
 		float: left;
 	}
 	#search-query input,img {
@@ -39,17 +40,35 @@
 	#ajax-loader {
 		display: none;
 	}
-	.lift_error {
-	  color: red;
-	  list-style:none;
-	  display: inline;
+	.weight-slider {
+		width: 10em;
 	}
-	.edit_error_class {
- 	 display: block;
- 	 color: red;
+	#search-weights input {
+		border: 0em;
 	}
     /* ]]> */
 	</style>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script>
+	<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/jquery-ui.min.js"></script>
+	<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css"></link>
+	<script>
+	/* <![CDATA[ */
+	for (weight in {"text": 1, "citation-count": 1, "age": 1}) {
+		(function(weight) {
+			$(function() {
+				$( "#weight-" + weight + "-slider" ).slider({
+					value: $("#weight-" + weight).val() * 50 + 50,
+					min: 0,
+					max: 100,
+					slide: function( event, ui ) {
+						$( "#weight-" + weight).val( (ui.value - 50) / 100);
+					}
+				});
+			});
+		})(weight);
+	}
+	/* ]]> */
+	</script>
 </head>
 <body>
 
@@ -68,19 +87,22 @@
 
 <div id="search-weights">
 <div>
-<input type="text" size="4" name="weight-text" />
-<label for="weight-abstract">Text weight</label>
+<label for="weight-text">Text weight:</label>
+<input type="text" size="4" name="weight-text" id="weight-text"/>
 <span class="lift:Msg?id=text-error&errorClass=error;">error</span>
+<div id="weight-text-slider" class="weight-slider"></div>
 </div>
 <div>
-<input type="text" size="4" name="weight-citation-count" />
-<label for="weight-citation-count">Citation count weight</label>
+<label for="weight-citation-count">Citation count weight:</label>
+<input type="text" size="4" name="weight-citation-count" id="weight-citation-count" />
 <span class="lift:Msg?id=citation-count-error&errorClass=error;">error</span>
+<div id="weight-citation-count-slider" class="weight-slider"></div>
 </div>
 <div>
-<input type="text" size="4" name="weight-age" />
-<label for="weight-age">Article age weight</label>
+<label for="weight-age">Article age weight:</label>
+<input type="text" size="4" name="weight-age" id="weight-age" />
 <span class="lift:Msg?id=age-error&errorClass=error;">error</span>
+<div id="weight-age-slider" class="weight-slider"></div>
 </div>
 </div>
 
