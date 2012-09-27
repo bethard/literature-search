@@ -98,6 +98,10 @@ object LiteratureSearch {
                 val parts = initials.map(_.toUpper + ".") :+ (lastName.head.toUpper + lastName.tail)
                 parts.mkString(" ")
               }
+              case _ => {
+                System.err.printf("Unexpected author format: \"%s\"\n", authorString)
+                authorString
+              }
             }
           }
           // TODO: add corporate authors?
