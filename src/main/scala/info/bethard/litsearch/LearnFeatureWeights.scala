@@ -1,29 +1,30 @@
 package info.bethard.litsearch
 
-import com.lexicalscope.jewel.cli.{ Option => CliOption }
-import com.lexicalscope.jewel.cli.CliFactory
 import java.io.File
+import java.io.FileWriter
 import java.io.PrintWriter
+import java.util.logging.Logger
+
+import scala.Array.canBuildFrom
+import scala.Option.option2Iterable
+import scala.collection.mutable.Buffer
+import scala.sys.process.Process
+
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.ParallelCompositeReader
-import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.Collector
+import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.Scorer
-import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.similarities.DefaultSimilarity
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
-import scala.collection.JavaConverters._
-import scala.collection.mutable.Buffer
-import scala.sys.process.Process
-import info.bethard.litsearch.IndexConfig.FieldNames
-import scala.sys.process.ProcessIO
-import java.util.logging.Logger
+
 import com.google.common.io.Files
-import java.io.FileWriter
-import com.google.common.base.Charsets
-import java.io.BufferedWriter
+import com.lexicalscope.jewel.cli.CliFactory
+import com.lexicalscope.jewel.cli.{ Option => CliOption }
+
+import info.bethard.litsearch.IndexConfig.FieldNames
 
 object LearnFeatureWeights {
 
@@ -37,13 +38,13 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("citation-count-index"))
     def getCitationCountIndex: File
 
-    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
+    @CliOption(longName = Array("n-hits"), defaultValue = Array("200"))
     def getNHits: Int
 
     @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
     def getNIterations: Int
 
-    @CliOption(longName = Array("max-articles"), defaultValue = Array("1000"))
+    @CliOption(longName = Array("max-articles"), defaultValue = Array("20"))
     def getMaxArticles: Int
 
     @CliOption(longName = Array("min-article-references"), defaultValue = Array("20"))
@@ -55,7 +56,7 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
 
-    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1"))
+    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("100"))
     def getSvmMapCost: Int
 
     @CliOption(longName = Array("query"), defaultValue = Array("premature"))
@@ -75,8 +76,7 @@ object LearnFeatureWeights {
       new File(options.getModelDir, "training-data-%d.svmmap-index".format(iteration))
 
     // create indexes from command line parameters
-    val titleIndex = new TitleTextIndex
-    val abstractIndex = new AbstractTextIndex
+    val textIndex = new TitleAbstractTextIndex
     val citationCountIndex = new CitationCountIndex
     val ageIndex = new AgeIndex(2012)
 
@@ -88,7 +88,7 @@ object LearnFeatureWeights {
 
     // determine the documents for training
     val queryString = options.getQuery
-    val topDocs = searcher.search(abstractIndex.createQuery(queryString), reader.maxDoc)
+    val topDocs = searcher.search(textIndex.createQuery(queryString), reader.maxDoc)
     val docs = topDocs.scoreDocs.iterator.map(_.doc).filter { docID =>
       val document = reader.document(docID)
       Option(document.get(FieldNames.citedArticleIDs)) match {
@@ -100,7 +100,7 @@ object LearnFeatureWeights {
         }
       }
     }.take(options.getMaxArticles).toSeq
-    this.logger.info("Found %d documents with \"%s\" in the abstract".format(docs.size, queryString))
+    this.logger.info("Found %d documents containing \"%s\"".format(docs.size, queryString))
 
     // remove any existing training data files
     for (iteration <- 1 to options.getNIterations) {
@@ -110,21 +110,23 @@ object LearnFeatureWeights {
       }
     }
 
-    // create main index as weighted sum of other indexes 
-    val indexes = Seq(titleIndex, abstractIndex, citationCountIndex, ageIndex)
-    var weights = Seq(1f, 1f, 0f, 0f)
+    // initialize index weights
+    val indexes = Seq(textIndex, citationCountIndex, ageIndex)
+    var weights = Seq(1f, 0f, 0f)
+
+    // prepare for writing output
+    val featureFormat = (0 until weights.size).map(_ + ":%f").mkString(" ")
+    val lineFormat = "%s qid:%d %s"
     for (iteration <- 1 to options.getNIterations) {
       this.logger.info("Current weights: " + weights)
+
+      // create main index as weighted sum of other indexes 
       val index = new CombinedIndex(indexes zip weights: _*)
 
-      // get rid of the query norm so that scores are directly interpretable
+      //get rid of the query norm so that scores are directly interpretable
       searcher.setSimilarity(new DefaultSimilarity {
         override def queryNorm(sumOfSquaredWeights: Float) = 1f
       })
-
-      // prepare for writing output
-      val featureFormat = (0 until weights.size).map(_ + ":%f").mkString(" ")
-      val lineFormat = "%s qid:%d %s"
 
       // prepare directory for svm files
       val trainingDataDir = new File(options.getModelDir, "training-data-" + iteration)
@@ -145,7 +147,10 @@ object LearnFeatureWeights {
         queryDocument = reader.document(doc)
         // only use articles with an abstract and a bibliography
         citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs))
-        abstractText <- Option(queryDocument.get(FieldNames.abstractText))
+        abstractText = Option(queryDocument.get(FieldNames.abstractText)).getOrElse("")
+        titleText = Option(queryDocument.get(FieldNames.titleText)).getOrElse("")
+        text = abstractText + titleText
+        if !text.isEmpty
       } yield {
 
         // prepare to write SVM-MAP files
@@ -155,8 +160,9 @@ object LearnFeatureWeights {
         // determine what articles were cited
         val citedIds = citedIdsString.split("\\s+").toSet
 
-        // create the query based on the abstract text
-        val query = index.createQuery(abstractText)
+        // create the query based on the title and abstract text
+        val query = index.createQuery(text)
+        println(query)
 
         // retrieve other articles based on the main query
         val collector = new DocScoresCollector(nHits)
@@ -175,8 +181,8 @@ object LearnFeatureWeights {
         // close the writer
         trainingDataWriter.close
 
-        // only add the file for training if there are both positive and negative examples
-        if (labels.toSet.size == 2) {
+        // only add the file for training if several relevant articles were found
+        if (labels.count(_ == "+1") >= 3) {
           nWritten += 1
           val trainingDataIndexWriter = new FileWriter(trainingDataIndexFile, true)
           trainingDataIndexWriter.write(trainingDataFile.getAbsolutePath)
@@ -257,6 +263,6 @@ class DocScoresCollector(maxSize: Int) extends Collector {
     while (this.priorityQueue.size > 0) {
       buffer += this.priorityQueue.pop
     }
-    buffer
+    buffer.reverse
   }
 }

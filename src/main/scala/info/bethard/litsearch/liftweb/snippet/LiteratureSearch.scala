@@ -1,38 +1,34 @@
 package info.bethard.litsearch.liftweb.snippet
 
 import java.io.File
+
+import scala.Array.canBuildFrom
+import scala.xml.Text
+
 import org.apache.lucene.index.DirectoryReader
+import org.apache.lucene.index.ParallelCompositeReader
+import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.TopDocs
 import org.apache.lucene.store.FSDirectory
-import info.bethard.litsearch.AbstractTextIndex
+
 import info.bethard.litsearch.AgeIndex
 import info.bethard.litsearch.CitationCountIndex
 import info.bethard.litsearch.CombinedIndex
-import info.bethard.litsearch.TitleTextIndex
+import info.bethard.litsearch.IndexConfig
+import info.bethard.litsearch.TitleAbstractTextIndex
 import net.liftweb.http.S
 import net.liftweb.http.SHtml
 import net.liftweb.http.js.JsCmd
 import net.liftweb.http.js.JsCmds
-import net.liftweb.http.js.JsCmds
 import net.liftweb.util.Helpers.strToCssBindPromoter
 import net.liftweb.util.Helpers.tryo
 import net.liftweb.util.Props
-import org.apache.lucene.index.ParallelCompositeReader
-import org.apache.lucene.search.IndexSearcher
-import scala.xml.Elem
-import scala.xml.Null
-import scala.collection.JavaConverters._
-import scala.xml.TopScope
-import scala.xml.Text
-import scala.xml.Node
-import info.bethard.litsearch.IndexConfig
-import org.apache.lucene.search.TopDocs
 
 object LiteratureSearch {
 
   val wokURLBase = "http://apps.webofknowledge.com/InboundService.do?product=WOS&action=retrieve&mode=FullRecord&UT="
 
-  val titleIndex = new TitleTextIndex
-  val abstractIndex = new AbstractTextIndex
+  val textIndex = new TitleAbstractTextIndex
   val citationCountIndex = new CitationCountIndex
   val ageIndex = new AgeIndex(2012)
 
@@ -50,8 +46,7 @@ object LiteratureSearch {
     // variables that will be loaded from the HTML form inputs
     var query = ""
     var nHits = 10
-    var titleWeight = "1.0"
-    var abstractWeight = "1.0"
+    var textWeight = "1.0"
     var citationCountWeight = "0.5"
     var ageWeight = "-0.1"
     var topDocs: TopDocs = null
@@ -59,8 +54,7 @@ object LiteratureSearch {
     // verify input values, and then return JavaScript that will post the results 
     def process(): JsCmd = {
       val stringWeightTuples = Seq(
-        (titleWeight, "title"),
-        (abstractWeight, "abstract"),
+        (textWeight, "text"),
         (citationCountWeight, "citation-count"),
         (ageWeight, "age"))
 
@@ -71,8 +65,7 @@ object LiteratureSearch {
 
       // use the weights to get the results 
       val jsonBox = for {
-        titleWeight <- tryo(titleWeight.toFloat)
-        abstractWeight <- tryo(abstractWeight.toFloat)
+        textWeight <- tryo(textWeight.toFloat)
         citationCountWeight <- tryo(citationCountWeight.toFloat)
         ageWeight <- tryo(ageWeight.toFloat)
         if !query.isEmpty
@@ -80,8 +73,7 @@ object LiteratureSearch {
 
         // create the index with the given weights
         val index = new CombinedIndex(
-          this.titleIndex -> titleWeight,
-          this.abstractIndex -> abstractWeight,
+          this.textIndex -> textWeight,
           this.citationCountIndex -> citationCountWeight,
           this.ageIndex -> ageWeight)
 
@@ -100,12 +92,17 @@ object LiteratureSearch {
           val source = doc.get(IndexConfig.FieldNames.sourceTitleText)
           val year = doc.get(IndexConfig.FieldNames.year)
           val authors = doc.get(IndexConfig.FieldNames.authors).split(" ").map { authorString =>
-            val Array(lastName, initials) = authorString.split("_")
-            val parts = initials.map(_.toUpper + ".") :+ (lastName.head.toUpper + lastName.tail)
-            parts.mkString(" ")
+            authorString.split("_") match {
+              case Array() => ""
+              case Array(lastName, initials) => {
+                val parts = initials.map(_.toUpper + ".") :+ (lastName.head.toUpper + lastName.tail)
+                parts.mkString(" ")
+              }
+            }
           }
+          // TODO: add corporate authors?
           val authorSpan = <span class="author">{ authors.mkString(", ") }</span>
-          val titleSpan = <span class="title"><a href={ wokURLBase + wokID }>{ title }</a></span>
+          val titleSpan = <span class="title"><a href={ wokURLBase + wokID } target="_blank">{ title }</a></span>
           val sourceSpan = <span class="source">{ source }</span>
           val yearSpan = <span class="year">{ year }</span>
           val parts = Seq(authorSpan, titleSpan, sourceSpan, yearSpan)
@@ -122,8 +119,7 @@ object LiteratureSearch {
 
     // set default input element values and register actions for storing modified values
     "name=query" #> SHtml.text(query, v => { query = v; nHits = 10 }) &
-      "name=weight-title" #> SHtml.text(titleWeight, v => { titleWeight = v; nHits = 10 }) &
-      "name=weight-abstract" #> SHtml.text(abstractWeight, v => { abstractWeight = v; nHits = 10 }) &
+      "name=weight-text" #> SHtml.text(textWeight, v => { textWeight = v; nHits = 10 }) &
       "name=weight-citation-count" #> SHtml.text(citationCountWeight, v => { citationCountWeight = v; nHits = 10 }) &
       "name=weight-age" #> SHtml.text(ageWeight, v => { ageWeight = v; nHits = 10 }) &
       // register an action for increasing the number of hits

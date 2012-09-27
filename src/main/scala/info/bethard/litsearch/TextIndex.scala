@@ -1,7 +1,8 @@
 package info.bethard.litsearch
 
+import org.apache.lucene.search.BooleanClause
+import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Query
-import org.apache.lucene.store.Directory
 
 class TextIndex(defaultField: String) extends Index {
 
@@ -13,3 +14,16 @@ class AbstractTextIndex
 
 class TitleTextIndex
   extends TextIndex(IndexConfig.FieldNames.titleText)
+
+class TitleAbstractTextIndex extends Index {
+
+  val subIndexes = Seq(new TitleTextIndex, new AbstractTextIndex)
+
+  def createQuery(queryText: String): Query = {
+    val query = new BooleanQuery
+    for (index <- this.subIndexes) {
+      query.add(index.createQuery(queryText), BooleanClause.Occur.SHOULD)
+    }
+    query
+  }
+}

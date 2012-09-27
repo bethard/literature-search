@@ -54,4 +54,27 @@ class TextIndexSuite extends IndexSuiteBase {
       reader.close
     }
   }
+
+  test("TitleAbstractTextIndex query returns correct articles") {
+    import IndexConfig.FieldNames.{ titleText, abstractText }
+    for (tempDir <- this.temporaryFSDirectory) {
+      // create the index of abstract texts
+      val index = new TitleAbstractTextIndex
+      this.writeDocuments(tempDir,
+        Seq(titleText -> "aaa bbb", abstractText -> "ccc"),
+        Seq(abstractText -> "ccc;ddd;eee"),
+        Seq(titleText -> "eee-fff-ggg"),
+        Seq(titleText -> "ggghhhiii", abstractText -> "ggghhhiii"))
+
+      // check some queries
+      val reader = DirectoryReader.open(tempDir)
+      val searcher = new IndexSearcher(reader)
+      val expected = Seq("aaa" -> Array(0), "ccc" -> Array(0, 1), "ggg" -> Array(2))
+      for ((query, expectedDocs) <- expected) {
+        val topDocs = searcher.search(index.createQuery(query), reader.maxDoc)
+        assert(topDocs.scoreDocs.map(_.doc) === expectedDocs)
+      }
+      reader.close
+    }
+  }
 }
