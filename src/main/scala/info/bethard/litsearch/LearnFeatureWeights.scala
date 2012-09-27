@@ -5,17 +5,19 @@ import java.io.FileWriter
 import java.io.PrintWriter
 import java.util.logging.Logger
 
-import scala.Array.canBuildFrom
-import scala.Option.option2Iterable
+import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import scala.sys.process.Process
 
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.ParallelCompositeReader
+import org.apache.lucene.search.BooleanClause
+import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Collector
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.Scorer
+import org.apache.lucene.search.TermRangeQuery
 import org.apache.lucene.search.similarities.DefaultSimilarity
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
@@ -38,13 +40,13 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("citation-count-index"))
     def getCitationCountIndex: File
 
-    @CliOption(longName = Array("n-hits"), defaultValue = Array("200"))
+    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
 
     @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
     def getNIterations: Int
 
-    @CliOption(longName = Array("max-articles"), defaultValue = Array("20"))
+    @CliOption(longName = Array("max-articles"), defaultValue = Array("100"))
     def getMaxArticles: Int
 
     @CliOption(longName = Array("min-article-references"), defaultValue = Array("20"))
@@ -56,7 +58,7 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
 
-    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("100"))
+    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1"))
     def getSvmMapCost: Int
 
     @CliOption(longName = Array("query"), defaultValue = Array("premature"))
@@ -152,6 +154,7 @@ object LearnFeatureWeights {
         text = abstractText + titleText
         if !text.isEmpty
       } yield {
+        val year = queryDocument.get(FieldNames.year).toInt
 
         // prepare to write SVM-MAP files
         val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
@@ -160,8 +163,13 @@ object LearnFeatureWeights {
         // determine what articles were cited
         val citedIds = citedIdsString.split("\\s+").toSet
 
-        // create the query based on the title and abstract text
-        val query = index.createQuery(text)
+        // create the query based from the title and abstract text,
+        // and only considering articles published before the query article
+        val query = new BooleanQuery()
+        val publishedBefore = TermRangeQuery.newStringRange(
+          FieldNames.year, (year - 100).toString, year.toString, true, false)
+        query.add(publishedBefore, BooleanClause.Occur.MUST)
+        query.add(index.createQuery(text), BooleanClause.Occur.MUST)
         println(query)
 
         // retrieve other articles based on the main query
@@ -181,8 +189,8 @@ object LearnFeatureWeights {
         // close the writer
         trainingDataWriter.close
 
-        // only add the file for training if several relevant articles were found
-        if (labels.count(_ == "+1") >= 3) {
+        // only add the file if both positive and negative examples were found
+        if (labels.toSet.size == 2) {
           nWritten += 1
           val trainingDataIndexWriter = new FileWriter(trainingDataIndexFile, true)
           trainingDataIndexWriter.write(trainingDataFile.getAbsolutePath)
@@ -211,7 +219,7 @@ object LearnFeatureWeights {
       val cost = options.getSvmMapCost.toString
       val svmMapCommand = Seq(svmMapPath, "-c", cost, trainingDataIndexFile.getPath, modelFile.getPath)
       val svmMap = Process(svmMapCommand, None, "PYTHONPATH" -> options.getSvmMapDir.getPath)
-      svmMap.!!
+      svmMap.!
 
       val printWeightsCommand = """import pickle; """ +
         """SVMBlank = type("SVMBlank", (), {}); """ +
@@ -244,7 +252,9 @@ class DocScoresCollector(maxSize: Int) extends Collector {
 
   override def setScorer(scorer: Scorer): Unit = {
     this.scorer = scorer
-    this.subScorers = CombinedIndex.extractSubScorers(scorer)
+    // get scorer without year restriction, then get sub-scorers from combined index
+    val Seq(yearScorer, queryScorer) = scorer.getChildren.asScala.toSeq
+    this.subScorers = CombinedIndex.extractSubScorers(queryScorer.child)
   }
 
   override def acceptsDocsOutOfOrder: Boolean = false
