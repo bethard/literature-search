@@ -1,23 +1,18 @@
 package info.bethard.litsearch.liftweb
 
-import org.mortbay.jetty.Server
-import org.mortbay.jetty.webapp.WebAppContext
-import org.mortbay.jetty.nio._
+import org.eclipse.jetty.server.Server
+import org.eclipse.jetty.server.nio.SelectChannelConnector
+import org.eclipse.jetty.webapp.WebAppContext
 
 object StartJettyServer {
 
   def main(args: Array[String]) = {
-    val server = new Server
-    val scc = new SelectChannelConnector
-    scc.setPort(8080)
-    server.setConnectors(Array(scc))
-
-    val context = new WebAppContext()
-    context.setServer(server)
-    context.setContextPath("/")
-    context.setWar("src/main/webapp")
-
-    server.addHandler(context)
+    val server = new Server(8180)
+    val webApp = new WebAppContext()
+    webApp.setServer(server)
+    webApp.setContextPath("/")
+    webApp.setWar("src/main/webapp")
+    server.setHandler(webApp)
 
     println(">>> STARTING EMBEDDED JETTY SERVER, PRESS ANY KEY TO STOP")
     server.start()
