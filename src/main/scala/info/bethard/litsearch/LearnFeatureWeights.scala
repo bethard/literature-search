@@ -52,13 +52,13 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("min-article-references"), defaultValue = Array("20"))
     def getMinArticleReferences: Int
 
-    @CliOption(longName = Array("min-article-citation-count"), defaultValue = Array("20"))
+    @CliOption(longName = Array("min-article-citation-count"), defaultValue = Array("100"))
     def getMinArticleCitationCount: Int
 
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
 
-    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1"))
+    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1000"))
     def getSvmMapCost: Int
 
     @CliOption(longName = Array("query"), defaultValue = Array("premature"))
