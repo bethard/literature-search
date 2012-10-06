@@ -45,9 +45,52 @@ object IndexWebOfKnowledge {
   }
 
   def parseIssue(identifier: String, lines: Iterator[Line]) = {
-    for (line <- lines.takeWhile(_.code != Code.Issue.End)) line.code match {
-      case Code.Item.UniqueIdentifier => this.parseItem(line.content, lines)
-      case _ => //System.err.println("Ignored from issue: " + line)
+    val issue = new Issue
+    var lastCode = ""
+    for (line <- lines.takeWhile(_.code != Code.Issue.End)) {
+      line.code match {
+        case Code.Issue.UniqueIdentifier => issue.uniqueIdentifier = Some(line.content)
+        case Code.Issue.TransactionTag => issue.transactionTag = Some(line.content)
+        case Code.Issue.ProductionWeeks => issue.productionWeeks = Some(line.content)
+        case Code.Issue.AccessionNumber => issue.accessionNumber = Some(line.content)
+        case Code.Issue.SequenceNumber => issue.sequenceNumber = Some(line.content)
+        case Code.Issue.DocumentType => issue.documentType = Some(line.content)
+        case Code.Issue.Title => issue.title.append(line.content)
+        case Code.Issue.TitleISO => issue.titleISO.append(line.content)
+        case Code.Issue.Title11Character => issue.title11Character = Some(line.content)
+        case Code.Issue.Title20Character => issue.title20Character = Some(line.content)
+        case Code.Issue.Title29Character => issue.title29Character = Some(line.content)
+        case Code.Issue.FullProductCoverage => issue.fullProductCoverage += line.content
+        case Code.Issue.SelectiveProductCoverage => issue.selectiveProductCoverage += line.content
+        case Code.Issue.SubjectCategory => issue.subjectCategories += line.content
+        case Code.Issue.ISSN => issue.issn = Some(line.content)
+        case Code.Issue.BookSeriesTitle => issue.bookSeriesTitle = Some(line.content)
+        case Code.Issue.BookSeriesSubTitle => issue.bookSeriesSubTitle = Some(line.content)
+        case Code.Issue.PublisherName => issue.publisherName = Some(line.content)
+        case Code.Issue.PublisherCity => issue.publisherCity = Some(line.content)
+        case Code.Issue.PublisherAddress => issue.publisherAddress.append(line.content)
+        case Code.Issue.Volume => issue.volume = Some(line.content)
+        case Code.Issue.Issue => issue.issue = Some(line.content)
+        case Code.Issue.PublicationYear => issue.publicationYear = Some(line.content.toInt)
+        case Code.Issue.PublicationDate => issue.publicationDate = Some(line.content)
+        case Code.Issue.Part => issue.part = Some(line.content)
+        case Code.Issue.Supplement => issue.supplement = Some(line.content)
+        case Code.Issue.SpecialIssue => issue.specialIssue = Some(line.content)
+        case Code.Issue.TGAAvailability => issue.tgaAvailability = Some(line.content)
+        case Code.Issue.ItemCount => issue.itemCount = Some(line.content.toInt)
+        case Code.Issue.FirstLoadDate => issue.firstLoadDate = Some(line.content)
+        case Code.Issue.OrderNumber => issue.orderNumber = Some(line.content)
+        case Code.Continuation => lastCode match {
+          case Code.Issue.Title => issue.title.append(line.content)
+          case Code.Issue.TitleISO => issue.titleISO.append(line.content)
+          case Code.Issue.PublisherAddress => issue.publisherAddress.append(line.content)
+          case _ => throw new UnsupportedOperationException("%s %s".format(lastCode, line))
+        }
+        case Code.Item.UniqueIdentifier => this.parseItem(line.content, lines)
+      }
+      if (line.code != Code.Continuation) {
+        lastCode = line.code
+      }
     }
   }
 
@@ -70,21 +113,61 @@ object IndexWebOfKnowledge {
     }
   }
 
-  case class File(
-    var name: Option[String] = None,
-    var copyright: Option[String] = None,
-    var headerFileType: Option[String] = None,
-    var creationDate: Option[String] = None,
-    var version: Option[String] = None,
-    var productCodes: Buffer[String] = Buffer.empty[String],
-    var customizationDate: Option[String] = None,
-    var productionWeeks: Option[String] = None,
-    var periodicity: Option[String] = None,
-    var issueCount: Option[Int] = None,
-    var itemCount: Option[Int] = None,
-    var lineCount: Option[Int] = None)
+  private final val NoString: Option[String] = None
+  private final val NoInt: Option[Int] = None
+
+  class File {
+    var name = NoString
+    var copyright = NoString
+    var headerFileType = NoString
+    var creationDate = NoString
+    var version = NoString
+    var productCodes = Buffer.empty[String]
+    var customizationDate = NoString
+    var productionWeeks = NoString
+    var periodicity = NoString
+    var issueCount = NoInt
+    var itemCount = NoInt
+    var lineCount = NoInt
+  }
+
+  class Issue {
+    var uniqueIdentifier = NoString
+    var transactionTag = NoString
+    var productionWeeks = NoString
+    var accessionNumber = NoString
+    var sequenceNumber = NoString
+    var documentType = NoString
+    var title = new StringBuilder
+    var titleISO = new StringBuilder
+    var title11Character = NoString
+    var title20Character = NoString
+    var title29Character = NoString
+    var fullProductCoverage = Buffer.empty[String]
+    var selectiveProductCoverage = Buffer.empty[String]
+    var subjectCategories = Buffer.empty[String]
+    var issn = NoString
+    var bookSeriesTitle = NoString
+    var bookSeriesSubTitle = NoString
+    var publisherName = NoString
+    var publisherCity = NoString
+    var publisherAddress = new StringBuilder
+    var volume = NoString
+    var issue = NoString
+    var publicationYear = NoInt
+    var publicationDate = NoString
+    var part = NoString
+    var supplement = NoString
+    var specialIssue = NoString
+    var tgaAvailability = NoString
+    var itemCount = NoInt
+    var firstLoadDate = NoString
+    var orderNumber = NoString
+  }
 
   object Code {
+    final val Continuation = "--"
+
     // File information records
     object File {
       final val Name = "FN"
@@ -107,15 +190,17 @@ object IndexWebOfKnowledge {
     object Issue {
       final val UniqueIdentifier = "UI"
       final val TransactionTag = "T1"
+      final val ProductionWeeks = "PW"
       final val AccessionNumber = "GA"
       final val SequenceNumber = "SQ"
-      final val Type = "PT"
-      final val FullTitle = "SO"
-      final val ISOAbbreviatedTitle = "JI"
-      final val Abbreviated11CharacterTitle = "J1"
-      final val Abbreviated20CharacterTitle = "J2"
-      final val Abbreviated29CharacterTitle = "J9"
+      final val DocumentType = "PT"
+      final val Title = "SO"
+      final val TitleISO = "JI"
+      final val Title11Character = "J1"
+      final val Title20Character = "J2"
+      final val Title29Character = "J9"
       final val FullProductCoverage = "CF"
+      final val SelectiveProductCoverage = "SL"
       final val SubjectCategory = "SC"
       final val ISSN = "SN"
       final val BookSeriesTitle = "SE"
@@ -131,7 +216,7 @@ object IndexWebOfKnowledge {
       final val Supplement = "SU"
       final val SpecialIssue = "SI"
       final val TGAAvailability = "TV"
-      final val SourceItemCount = "IL"
+      final val ItemCount = "IL"
       final val FirstLoadDate = "LD"
       final val OrderNumber = "IO"
       final val End = "RE"
@@ -158,7 +243,7 @@ object IndexWebOfKnowledge {
       final val CorporateAuthorAddressIdentifier = "AD"
       final val CorporateAuthorFullAddress = "AA"
       final val CorporateAuthorEmailAddress = "EM"
-      final val Type = "DT"
+      final val DocumentType = "DT"
       final val BeginningPage = "BP"
       final val EndingPage = "EP"
       final val PageCount = "PG"
