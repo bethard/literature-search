@@ -10,7 +10,7 @@ import scala.collection.mutable.Buffer
 object IndexWebOfKnowledge {
 
   def main(args: Array[String]): Unit = {
-    val paths = for (dir <- args.toList; path <- Path.fromString(dir).children()) yield path
+    val paths = args.toList.flatMap(Path.fromString(_).children())
     val getDate: Path => String = withLinesIterator(_) {
       _.filter(_.code == "H8").map(_.content).next
     }
