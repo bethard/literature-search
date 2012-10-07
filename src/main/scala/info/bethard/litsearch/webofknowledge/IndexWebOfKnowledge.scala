@@ -258,93 +258,140 @@ object IndexWebOfKnowledge {
     }
   }
 
+  class ReprintAddress {
+    var author = NoString
+    var fullAddress = new StringBuilder
+    var organization = NoString
+    var subOrganizations = Buffer.empty[String]
+    var streetAddress = NoString
+    var city = NoString
+    var province = NoString
+    var country = NoString
+    var postalCodes = Buffer.empty[String]
+  }
+
   def parseReprintAddress(lines: Iterator[Line]) = {
+    val address = new ReprintAddress
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
-        case "RA" => // TODO: Author
-        case "NF" => // TODO: FullAddress
-        case "NC" => // TODO: Organization
-        case "ND" => // TODO: SubOrganization
-        case "NN" => // TODO: StreetAddress
-        case "NY" => // TODO: City
-        case "NP" => // TODO: Province
-        case "NU" => // TODO: Country
-        case "NZ" => // TODO: PostalCode
-        case "--" => // TODO: continuation of previous code
+        case "RA" => address.author = Some(line.content)
+        case "NF" => address.fullAddress.append(line.content)
+        case "NC" => address.organization = Some(line.content)
+        case "ND" => address.subOrganizations += line.content
+        case "NN" => address.streetAddress = Some(line.content)
+        case "NY" => address.city = Some(line.content)
+        case "NP" => address.province = Some(line.content)
+        case "NU" => address.country = Some(line.content)
+        case "NZ" => address.postalCodes.append(line.content)
+        case "--" => lastCode match {
+          case "NF" => address.fullAddress.append(line.content)
+        }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+  }
+
+  class ResearchAddress {
+    var identifier = NoString
+    var fullAddress = new StringBuilder
+    var organization = NoString
+    var subOrganizations = Buffer.empty[String]
+    var city = NoString
+    var province = NoString
+    var country = NoString
+    var postalCodes = Buffer.empty[String]
   }
 
   def parseResearchAddress(lines: Iterator[Line]) = {
+    val address = new ResearchAddress
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
-        case "CN" => // TODO: AddressIdentifier
-        case "NF" => // TODO: FullAddress
-        case "NC" => // TODO: Organization
-        case "ND" => // TODO: SubOrganization
-        case "NY" => // TODO: City
-        case "NP" => // TODO: Province
-        case "NU" => // TODO: Country
-        case "NZ" => // TODO: PostalCode
-        case "--" => // TODO: continuation of previous code
+        case "CN" => address.identifier = Some(line.content)
+        case "NF" => address.fullAddress.append(line.content)
+        case "NC" => address.organization = Some(line.content)
+        case "ND" => address.subOrganizations += line.content
+        case "NY" => address.city = Some(line.content)
+        case "NP" => address.province = Some(line.content)
+        case "NU" => address.country = Some(line.content)
+        case "NZ" => address.postalCodes.append(line.content)
+        case "--" => lastCode match {
+          case "NF" => address.fullAddress.append(line.content)
+        }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+  }
+
+  class FundingAcknowledgement {
+    var organizationName = new StringBuilder
+    var grantNumbers = Buffer.empty[StringBuilder]
   }
 
   def parseFundingAcknowledgement(lines: Iterator[Line]) = {
+    val acknowledgement = new FundingAcknowledgement
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "GX")) {
       line.code match {
-        case "GO" => // TODO: OrganizationName
-        case "GN" => // TODO: GrantNumber
-        case "--" => // TODO: continuation of previous code
+        case "GO" => acknowledgement.organizationName.append(line.content)
+        case "GN" => acknowledgement.grantNumbers += new StringBuilder(line.content)
+        case "--" => lastCode match {
+          case "GO" => acknowledgement.organizationName.append(line.content)
+          case "GN" => acknowledgement.grantNumbers.last.append(line.content)
+        }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+  }
+
+  class CitedPatent {
+    var assignee = NoString
+    var year = NoInt
+    var number = NoString
+    var country = NoString
+    var patentType = NoString
   }
 
   def parseCitedPatent(lines: Iterator[Line]) = {
-    var lastCode = ""
-    for (line <- lines.takeWhile(_.code != "EC")) {
-      line.code match {
-        case "/A" => // TODO: Assignee
-        case "/Y" => // TODO: Year
-        case "/W" => // TODO: Number
-        case "/N" => // TODO: Country
-        case "/C" => // TODO: Type
-      }
-      if (line.code != "--") {
-        lastCode = line.code
-      }
+    val citation = new CitedPatent
+    for (line <- lines.takeWhile(_.code != "EC")) line.code match {
+      case "/A" => citation.assignee = Some(line.content)
+      case "/Y" => citation.year = Some(line.content.toInt)
+      case "/W" => citation.number = Some(line.content)
+      case "/N" => citation.country = Some(line.content)
+      case "/C" => citation.patentType = Some(line.content)
     }
   }
 
+  class CitedReference {
+    var identifier = NoString
+    var identifierForReferences = NoString
+    var author = NoString
+    var year = NoString // there are things like 19AU
+    var work = NoString
+    var volume = NoString
+    var page = NoString
+    var citationType = NoString
+  }
+
   def parseCitedReference(lines: Iterator[Line]) = {
-    var lastCode = ""
-    for (line <- lines.takeWhile(_.code != "EC")) {
-      line.code match {
-        case "RS" => // TODO: Identifier
-        case "R9" => // TODO: IdentifierForReferences
-        case "/A" => // TODO: Author
-        case "/Y" => // TODO: Year
-        case "/W" => // TODO: Work
-        case "/V" => // TODO: Volume
-        case "/P" => // TODO: Page
-        case "/I" => // TODO: ImplicitCiteCode
-      }
-      if (line.code != "--") {
-        lastCode = line.code
-      }
+    val citation = new CitedReference
+    for (line <- lines.takeWhile(_.code != "EC"); if line.content != "") line.code match {
+      case "RS" => citation.identifier = Some(line.content)
+      case "R9" => citation.identifierForReferences = Some(line.content)
+      case "/A" => citation.author = Some(line.content)
+      case "/Y" => citation.year = Some(line.content)
+      case "/W" => citation.work = Some(line.content)
+      case "/V" => citation.volume = Some(line.content)
+      case "/P" => citation.page = Some(line.content)
+      case "/I" => citation.citationType = Some(line.content)
     }
   }
 }
