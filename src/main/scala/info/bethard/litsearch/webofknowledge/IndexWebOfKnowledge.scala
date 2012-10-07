@@ -12,90 +12,89 @@ object IndexWebOfKnowledge {
   def main(args: Array[String]): Unit = {
     val paths = for (dir <- args.toList; path <- Path.fromString(dir).children()) yield path
     val getDate: Path => String = withLinesIterator(_) {
-      _.filter(_.code == Code.File.CreationDate).map(_.content).next
+      _.filter(_.code == "H8").map(_.content).next
     }
     for (path <- paths.sortBy(getDate)) {
       println(path.path)
       withLinesIterator(path) { lines =>
         val line = lines.next
-        assert(line.code == Code.File.Name)
-        this.parseFile(lines)
+        assert(line.code == "FN")
+        this.parseFile(line.content, lines)
       }
     }
   }
 
-  def parseFile(lines: Iterator[Line]) = {
-    val file = new File
-    for (line <- lines.takeWhile(_.code != Code.File.End)) line.code match {
-      case Code.File.Name => file.name = Some(line.content)
-      case Code.File.Copyright => file.copyright = Some(line.content)
-      case Code.File.HeaderFileType => file.headerFileType = Some(line.content)
-      case Code.File.CreationDate => file.creationDate = Some(line.content)
-      case Code.File.Version => file.version = Some(line.content)
-      case Code.File.ProductCode => file.productCodes += line.content
-      case Code.File.CustomizationDate => file.customizationDate = Some(line.content)
-      case Code.File.ProductionWeeks => file.productionWeeks = Some(line.content)
-      case Code.File.Periodicity => file.periodicity = Some(line.content)
-      case Code.File.IssueCount => file.issueCount = Some(line.content.toInt)
-      case Code.File.ItemCount => file.itemCount = Some(line.content.toInt)
-      case Code.File.LineCount => file.lineCount = Some(line.content.toInt)
-      case Code.File.EndInformation =>
-      case Code.Issue.Identifier => this.parseIssue(line.content, lines)
+  def parseFile(fileName: String, lines: Iterator[Line]) = {
+    val file = new File(fileName)
+    for (line <- lines.takeWhile(_.code != "EF")) line.code match {
+      case "CC" => file.copyright = Some(line.content)
+      case "HF" => file.headerFileType = Some(line.content)
+      case "H8" => file.creationDate = Some(line.content)
+      case "H9" => file.version = Some(line.content)
+      case "PV" => file.productCodes += line.content
+      case "CW" => file.customizationDate = Some(line.content)
+      case "PW" => file.productionWeeks = Some(line.content)
+      case "FQ" => file.periodicity = Some(line.content)
+      case "H5" => file.issueCount = Some(line.content.toInt)
+      case "H6" => file.itemCount = Some(line.content.toInt)
+      case "H7" => file.lineCount = Some(line.content.toInt)
+      case "RE" => // end of file attributes
+      case "UI" => this.parseIssue(line.content, lines)
     }
   }
 
   def parseIssue(issueIdentifier: String, lines: Iterator[Line]) = {
     val issue = new Issue(issueIdentifier)
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.Issue.End)) {
+    for (line <- lines.takeWhile(_.code != "RE")) {
       line.code match {
-        case Code.Issue.TransactionTag => line.content.charAt(0) match {
+        case "T1" => line.content.charAt(0) match {
           case 'N' => // no change
           case 'C' => // TODO: issue changed, but article records may not be included
           case 'D' => // TODO: delete entire issue and all articles
           case 'R' => // TODO: issue and all articles will be replaced
           case 'I' => // TODO: (undocumented) insert new issue maybe?
         }
-        case Code.Issue.ProductionWeeks => issue.productionWeeks = Some(line.content)
-        case Code.Issue.AccessionNumber => issue.accessionNumber = Some(line.content)
-        case Code.Issue.SequenceNumber => issue.sequenceNumber = Some(line.content)
-        case Code.Issue.DocumentType => issue.documentType = Some(line.content)
-        case Code.Issue.Title => issue.title.append(line.content)
-        case Code.Issue.TitleISO => issue.titleISO.append(line.content)
-        case Code.Issue.Title11Character => issue.title11Character = Some(line.content)
-        case Code.Issue.Title20Character => issue.title20Character = Some(line.content)
-        case Code.Issue.Title29Character => issue.title29Character = Some(line.content)
-        case Code.Issue.FullProductCoverage => issue.fullProductCoverage += line.content
-        case Code.Issue.SelectiveProductCoverage => issue.selectiveProductCoverage += line.content
-        case Code.Issue.SubjectCategory => issue.subjectCategories += line.content
-        case Code.Issue.ISSN => issue.issn = Some(line.content)
-        case Code.Issue.BookSeriesTitle => issue.bookSeriesTitle.append(line.content)
-        case Code.Issue.BookSeriesSubTitle => issue.bookSeriesSubTitle.append(line.content)
-        case Code.Issue.PublisherName => issue.publisherName = Some(line.content)
-        case Code.Issue.PublisherCity => issue.publisherCity = Some(line.content)
-        case Code.Issue.PublisherAddress => issue.publisherAddress.append(line.content)
-        case Code.Issue.Volume => issue.volume = Some(line.content)
-        case Code.Issue.Issue => issue.issue = Some(line.content)
-        case Code.Issue.PublicationYear => issue.publicationYear = Some(line.content.toInt)
-        case Code.Issue.PublicationDate => issue.publicationDate = Some(line.content)
-        case Code.Issue.Part => issue.part = Some(line.content)
-        case Code.Issue.Supplement => issue.supplement = Some(line.content)
-        case Code.Issue.SpecialIssue => issue.specialIssue = Some(line.content)
-        case Code.Issue.TGAAvailability => issue.tgaAvailability = Some(line.content)
-        case Code.Issue.ItemCount => issue.itemCount = Some(line.content.toInt)
-        case Code.Issue.FirstLoadDate => issue.firstLoadDate = Some(line.content)
-        case Code.Issue.OrderNumber => issue.orderNumber = Some(line.content)
-        case Code.Continuation => lastCode match {
-          case Code.Issue.Title => issue.title.append(line.content)
-          case Code.Issue.TitleISO => issue.titleISO.append(line.content)
-          case Code.Issue.BookSeriesTitle => issue.bookSeriesTitle.append(line.content)
-          case Code.Issue.BookSeriesSubTitle => issue.bookSeriesSubTitle.append(line.content)
-          case Code.Issue.PublisherAddress => issue.publisherAddress.append(line.content)
+        case "PW" => issue.productionWeeks = Some(line.content)
+        case "GA" => issue.accessionNumber = Some(line.content)
+        case "SQ" => issue.sequenceNumber = Some(line.content)
+        case "PT" => issue.documentType = Some(line.content)
+        case "SO" => issue.title.append(line.content)
+        case "JI" => issue.titleISO.append(line.content)
+        case "J1" => issue.title11Character = Some(line.content)
+        case "J2" => issue.title20Character = Some(line.content)
+        case "J9" => issue.title29Character = Some(line.content)
+        case "CF" => issue.fullProductCoverage += line.content
+        case "SL" => issue.selectiveProductCoverage += line.content
+        case "SC" => issue.subjectCategories += line.content
+        case "SN" => issue.issn = Some(line.content)
+        case "SE" => issue.bookSeriesTitle.append(line.content)
+        case "BS" => issue.bookSeriesSubTitle.append(line.content)
+        case "PU" => issue.publisherName = Some(line.content)
+        case "PI" => issue.publisherCity = Some(line.content)
+        case "PA" => issue.publisherAddress.append(line.content)
+        case "VL" => issue.volume = Some(line.content)
+        case "IS" => issue.issue = Some(line.content)
+        case "PY" => issue.publicationYear = Some(line.content.toInt)
+        case "PD" => issue.publicationDate = Some(line.content)
+        case "PN" => issue.part = Some(line.content)
+        case "SU" => issue.supplement = Some(line.content)
+        case "SI" => issue.specialIssue = Some(line.content)
+        case "TV" => issue.tgaAvailability = Some(line.content)
+        case "IL" => issue.itemCount = Some(line.content.toInt)
+        case "LD" => issue.firstLoadDate = Some(line.content)
+        case "IO" => issue.orderNumber = Some(line.content)
+        case "--" => lastCode match {
+          case "SO" => issue.title.append(line.content)
+          case "JI" => issue.titleISO.append(line.content)
+          case "SE" => issue.bookSeriesTitle.append(line.content)
+          case "BS" => issue.bookSeriesSubTitle.append(line.content)
+          case "PA" => issue.publisherAddress.append(line.content)
           case _ => throw new UnsupportedOperationException("%s %s".format(lastCode, line))
         }
-        case Code.Item.Identifier => this.parseItem(line.content, lines)
+        case "UT" => this.parseItem(line.content, lines)
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -104,63 +103,63 @@ object IndexWebOfKnowledge {
   def parseItem(itemIdentifier: String, lines: Iterator[Line]) = {
     val item = new Item(itemIdentifier)
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.Item.End)) {
+    for (line <- lines.takeWhile(_.code != "EX")) {
       line.code match {
-        case Code.Item.TransactionTag => line.content.charAt(0) match {
+        case "T2" => line.content.charAt(0) match {
           case 'R' => // TODO: replace or insert article
           case 'C' => // TODO: modify article
           case 'I' => // TODO: (undocumented) insert new item maybe?
         }
-        case Code.Item.TransactionChangeTag => // specifies what changed, but full record will be present
-        case Code.Item.IdentifierAlternate => item.identifierAlternate = Some(line.content)
-        case Code.Item.IdentifierForReferences => item.identifierForReferences = Some(line.content)
-        case Code.Item.SelectiveProductCoverage => item.selectiveProductCoverage += line.content
-        case Code.Item.Title => item.title.append(line.content)
-        case Code.Item.ReviewedWorkLanguage => item.reviewedWorkLanguages += line.content
-        case Code.Item.ReviewedWorkAuthor => item.reviewedWorkAuthors += line.content
-        case Code.Item.ReviewedWorkPublicationYear => item.reviewedWorkPublicationYear = Some(line.content.toInt)
-        case Code.Item.Author => item.authors += line.content
-        case Code.Item.AuthorRole => item.authorRoles += line.content
-        case Code.Item.AuthorLastName => item.authorLastNames += line.content
-        case Code.Item.AuthorFirstName => item.authorFirstNames += line.content
-        case Code.Item.AuthorNameSuffix => item.authorNameSuffixes += line.content
-        case Code.Item.AuthorAddressIdentifier => item.authorAddressIdentifiers += line.content
-        case Code.Item.AuthorFullAddress => item.authorFullAddresses += new StringBuilder(line.content)
-        case Code.Item.AuthorEmailAddress => item.authorFullAddresses += new StringBuilder(line.content)
-        case Code.Item.CorporateAuthor => item.corporateAuthor += line.content
-        case Code.Item.DocumentType => item.documentType = Some(line.content)
-        case Code.Item.BeginningPage => item.beginningPage = Some(line.content)
-        case Code.Item.EndingPage => item.endingPage = Some(line.content)
-        case Code.Item.PageCount => item.pageCount = Some(line.content.toInt)
-        case Code.Item.Language => item.languages += line.content
-        case Code.Item.MeetingAbstractNumber => item.meetingAbstractNumber = Some(line.content)
-        case Code.Item.Keywords => item.keywords += new StringBuilder(line.content)
-        case Code.Item.KeywordsPlus => item.keywordsPlus += new StringBuilder(line.content)
-        case Code.Item.FundingAcknowledgementText => item.fundingAcknowledgementText += new StringBuilder(line.content)
-        case Code.Item.AbstractAvailability => item.abstractAvailability = Some(line.content)
-        case Code.Item.AbstractText => item.abstractText += new StringBuilder(line.content)
-        case Code.Item.CitedReferenceCount => {
+        case "T3" => // specifies what changed, but full record will be present
+        case "AR" => item.identifierAlternate = Some(line.content)
+        case "T9" => item.identifierForReferences = Some(line.content)
+        case "SL" => item.selectiveProductCoverage += line.content
+        case "TI" => item.title.append(line.content)
+        case "RL" => item.reviewedWorkLanguages += line.content
+        case "RW" => item.reviewedWorkAuthors += line.content
+        case "RY" => item.reviewedWorkPublicationYear = Some(line.content.toInt)
+        case "AU" => item.authors += line.content
+        case "RO" => item.authorRoles += line.content
+        case "LN" => item.authorLastNames += line.content
+        case "AF" => item.authorFirstNames += line.content
+        case "AS" => item.authorNameSuffixes += line.content
+        case "AD" => item.authorAddressIdentifiers += line.content
+        case "AA" => item.authorFullAddresses += new StringBuilder(line.content)
+        case "EM" => item.authorEmailAddresses += new StringBuilder(line.content)
+        case "AG" => item.corporateAuthor += line.content
+        case "DT" => item.documentType = Some(line.content)
+        case "BP" => item.beginningPage = Some(line.content)
+        case "EP" => item.endingPage = Some(line.content)
+        case "PG" => item.pageCount = Some(line.content.toInt)
+        case "LA" => item.languages += line.content
+        case "MA" => item.meetingAbstractNumber = Some(line.content)
+        case "DE" => item.keywords += new StringBuilder(line.content)
+        case "ID" => item.keywordsPlus += new StringBuilder(line.content)
+        case "GT" => item.fundingAcknowledgementText += new StringBuilder(line.content)
+        case "AV" => item.abstractAvailability = Some(line.content)
+        case "AB" => item.abstractText += new StringBuilder(line.content)
+        case "NR" => {
           val content = line.content.trim
           if (content != "NK") {
             item.citedReferenceCount = Some(content.toInt)
           }
         }
-        case Code.Continuation => lastCode match {
-          case Code.Item.Title => item.title.append(line.content)
-          case Code.Item.AuthorFullAddress => item.authorFullAddresses.last.append(line.content)
-          case Code.Item.AuthorEmailAddress => item.authorFullAddresses.last.append(line.content)
-          case Code.Item.Keywords => item.keywords.last.append(line.content)
-          case Code.Item.KeywordsPlus => item.keywordsPlus.last.append(line.content)
-          case Code.Item.FundingAcknowledgementText => item.fundingAcknowledgementText.last.append(line.content)
-          case Code.Item.AbstractText => item.abstractText.last.append(line.content)
+        case "--" => lastCode match {
+          case "TI" => item.title.append(line.content)
+          case "AA" => item.authorFullAddresses.last.append(line.content)
+          case "EM" => item.authorEmailAddresses.last.append(line.content)
+          case "DE" => item.keywords.last.append(line.content)
+          case "ID" => item.keywordsPlus.last.append(line.content)
+          case "GT" => item.fundingAcknowledgementText.last.append(line.content)
+          case "AB" => item.abstractText.last.append(line.content)
         }
-        case Code.ReprintAddress.Begin => this.parseReprintAddress(lines)
-        case Code.ResearchAddress.Begin => this.parseResearchAddress(lines)
-        case Code.FundingAcknowledgement.Begin => this.parseFundingAcknowledgement(lines)
-        case Code.CitedPatent.Begin => this.parseCitedPatent(lines)
-        case Code.CitedReference.Begin => this.parseCitedReference(lines)
+        case "RP" => this.parseReprintAddress(lines)
+        case "C1" => this.parseResearchAddress(lines)
+        case "GB" => this.parseFundingAcknowledgement(lines)
+        case "CP" => this.parseCitedPatent(lines)
+        case "CR" => this.parseCitedReference(lines)
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -168,11 +167,20 @@ object IndexWebOfKnowledge {
 
   def parseReprintAddress(lines: Iterator[Line]) = {
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.ReprintAddress.End)) {
+    for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
-        case _ => // TODO
+        case "RA" => // TODO: Author
+        case "NF" => // TODO: FullAddress
+        case "NC" => // TODO: Organization
+        case "ND" => // TODO: SubOrganization
+        case "NN" => // TODO: StreetAddress
+        case "NY" => // TODO: City
+        case "NP" => // TODO: Province
+        case "NU" => // TODO: Country
+        case "NZ" => // TODO: PostalCode
+        case "--" => // TODO: continuation of previous code
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -180,11 +188,19 @@ object IndexWebOfKnowledge {
 
   def parseResearchAddress(lines: Iterator[Line]) = {
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.ResearchAddress.End)) {
+    for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
-        case _ => // TODO
+        case "CN" => // TODO: AddressIdentifier
+        case "NF" => // TODO: FullAddress
+        case "NC" => // TODO: Organization
+        case "ND" => // TODO: SubOrganization
+        case "NY" => // TODO: City
+        case "NP" => // TODO: Province
+        case "NU" => // TODO: Country
+        case "NZ" => // TODO: PostalCode
+        case "--" => // TODO: continuation of previous code
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -192,11 +208,13 @@ object IndexWebOfKnowledge {
 
   def parseFundingAcknowledgement(lines: Iterator[Line]) = {
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.FundingAcknowledgement.End)) {
+    for (line <- lines.takeWhile(_.code != "GX")) {
       line.code match {
-        case _ => // TODO
+        case "GO" => // TODO: OrganizationName
+        case "GN" => // TODO: GrantNumber
+        case "--" => // TODO: continuation of previous code
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -204,11 +222,15 @@ object IndexWebOfKnowledge {
 
   def parseCitedPatent(lines: Iterator[Line]) = {
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.CitedPatent.End)) {
+    for (line <- lines.takeWhile(_.code != "EC")) {
       line.code match {
-        case _ => // TODO
+        case "/A" => // TODO: Assignee
+        case "/Y" => // TODO: Year
+        case "/W" => // TODO: Number
+        case "/N" => // TODO: Country
+        case "/C" => // TODO: Type
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -216,11 +238,18 @@ object IndexWebOfKnowledge {
 
   def parseCitedReference(lines: Iterator[Line]) = {
     var lastCode = ""
-    for (line <- lines.takeWhile(_.code != Code.CitedReference.End)) {
+    for (line <- lines.takeWhile(_.code != "EC")) {
       line.code match {
-        case _ => // TODO
+        case "RS" => // TODO: Identifier
+        case "R9" => // TODO: IdentifierForReferences
+        case "/A" => // TODO: Author
+        case "/Y" => // TODO: Year
+        case "/W" => // TODO: Work
+        case "/V" => // TODO: Volume
+        case "/P" => // TODO: Page
+        case "/I" => // TODO: ImplicitCiteCode
       }
-      if (line.code != Code.Continuation) {
+      if (line.code != "--") {
         lastCode = line.code
       }
     }
@@ -242,8 +271,7 @@ object IndexWebOfKnowledge {
   private final val NoString: Option[String] = None
   private final val NoInt: Option[Int] = None
 
-  class File {
-    var name = NoString
+  class File(val name: String) {
     var copyright = NoString
     var headerFileType = NoString
     var creationDate = NoString
@@ -318,153 +346,5 @@ object IndexWebOfKnowledge {
     var abstractAvailability = NoString
     var abstractText = Buffer.empty[StringBuilder]
     var citedReferenceCount = NoInt
-  }
-
-  object Code {
-    final val Continuation = "--"
-
-    object File {
-      final val Name = "FN"
-      final val Copyright = "CC"
-      final val HeaderFileType = "HF"
-      final val CreationDate = "H8"
-      final val Version = "H9"
-      final val ProductCode = "PV"
-      final val CustomizationDate = "CW"
-      final val ProductionWeeks = "PW"
-      final val Periodicity = "FQ"
-      final val IssueCount = "H5"
-      final val ItemCount = "H6"
-      final val LineCount = "H7"
-      final val EndInformation = "RE"
-      final val End = "EF"
-    }
-
-    object Issue {
-      final val Identifier = "UI"
-      final val TransactionTag = "T1"
-      final val ProductionWeeks = "PW"
-      final val AccessionNumber = "GA"
-      final val SequenceNumber = "SQ"
-      final val DocumentType = "PT"
-      final val Title = "SO"
-      final val TitleISO = "JI"
-      final val Title11Character = "J1"
-      final val Title20Character = "J2"
-      final val Title29Character = "J9"
-      final val FullProductCoverage = "CF"
-      final val SelectiveProductCoverage = "SL"
-      final val SubjectCategory = "SC"
-      final val ISSN = "SN"
-      final val BookSeriesTitle = "SE"
-      final val BookSeriesSubTitle = "BS"
-      final val PublisherName = "PU"
-      final val PublisherCity = "PI"
-      final val PublisherAddress = "PA"
-      final val Volume = "VL"
-      final val Issue = "IS"
-      final val PublicationYear = "PY"
-      final val PublicationDate = "PD"
-      final val Part = "PN"
-      final val Supplement = "SU"
-      final val SpecialIssue = "SI"
-      final val TGAAvailability = "TV"
-      final val ItemCount = "IL"
-      final val FirstLoadDate = "LD"
-      final val OrderNumber = "IO"
-      final val End = "RE"
-    }
-
-    object Item {
-      final val Identifier = "UT"
-      final val IdentifierAlternate = "AR"
-      final val IdentifierForReferences = "T9"
-      final val SelectiveProductCoverage = "SL"
-      final val TransactionTag = "T2"
-      final val TransactionChangeTag = "T3"
-      final val Title = "TI"
-      final val ReviewedWorkLanguage = "RL"
-      final val ReviewedWorkAuthor = "RW"
-      final val ReviewedWorkPublicationYear = "RY"
-      final val Author = "AU"
-      final val AuthorRole = "RO"
-      final val AuthorLastName = "LN"
-      final val AuthorFirstName = "AF"
-      final val AuthorNameSuffix = "AS"
-      final val AuthorAddressIdentifier = "AD"
-      final val AuthorFullAddress = "AA"
-      final val AuthorEmailAddress = "EM"
-      final val CorporateAuthor = "AG"
-      final val DocumentType = "DT"
-      final val BeginningPage = "BP"
-      final val EndingPage = "EP"
-      final val PageCount = "PG"
-      final val Language = "LA"
-      final val MeetingAbstractNumber = "MA"
-      final val Keywords = "DE"
-      final val KeywordsPlus = "ID"
-      final val FundingAcknowledgementText = "GT"
-      final val AbstractAvailability = "AV"
-      final val AbstractText = "AB"
-      final val CitedReferenceCount = "NR"
-      final val End = "EX"
-    }
-
-    object ReprintAddress {
-      final val Begin = "RP"
-      final val Author = "RA"
-      final val FullAddress = "NF"
-      final val Organization = "NC"
-      final val SubOrganization = "ND"
-      final val StreetAddress = "NN"
-      final val City = "NY"
-      final val Province = "NP"
-      final val Country = "NU"
-      final val PostalCode = "NZ"
-      final val End = "EA"
-    }
-
-    object ResearchAddress {
-      final val Begin = "C1"
-      final val AddressIdentifier = "CN"
-      final val FullAddress = "NF"
-      final val Organization = "NC"
-      final val SubOrganization = "ND"
-      final val City = "NY"
-      final val Province = "NP"
-      final val Country = "NU"
-      final val PostalCode = "NZ"
-      final val End = "EA"
-    }
-
-    object FundingAcknowledgement {
-      final val Begin = "GB"
-      final val OrganizationName = "GO"
-      final val GrantNumber = "GN"
-      final val End = "GX"
-    }
-
-    object CitedPatent {
-      final val Begin = "CP"
-      final val Assignee = "/A"
-      final val Year = "/Y"
-      final val Number = "/W"
-      final val Country = "/N"
-      final val Type = "/C"
-      final val End = "EC"
-    }
-
-    object CitedReference {
-      final val Begin = "CR"
-      final val Identifier = "RS"
-      final val IdentifierForReferences = "R9"
-      final val Author = "/A"
-      final val Year = "/Y"
-      final val Work = "/W"
-      final val Volume = "/V"
-      final val Page = "/P"
-      final val ImplicitCiteCode = "/I"
-      final val End = "EC"
-    }
   }
 }
