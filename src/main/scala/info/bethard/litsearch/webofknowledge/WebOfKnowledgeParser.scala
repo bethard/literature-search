@@ -1,20 +1,25 @@
 package info.bethard.litsearch.webofknowledge
 
 import java.util.zip.GZIPInputStream
-import resource.ExtractableManagedResource
-import scalax.file.Path
-import scalax.io.Input
-import scalax.io.JavaConverters._
+
 import scala.collection.mutable.Buffer
 
-object IndexWebOfKnowledge {
+import scalax.file.Path
+import scalax.io.JavaConverters.asInputConverter
 
-  def main(args: Array[String]): Unit = {
-    val paths = args.toList.flatMap(Path.fromString(_).children())
-    val getDate: Path => String = withLinesIterator(_) {
-      _.filter(_.code == "H8").map(_.content).next
+class WebOfKnowledgeParser {
+  import WebOfKnowledgeParser._
+
+  def parse(directories: Seq[Path]) = {
+    // get all files in the directories, and sort them by date
+    val paths = directories.flatMap(_.children()).sortBy {
+      withLinesIterator(_) {
+        _.filter(_.code == "H8").map(_.content).next
+      }
     }
-    for (path <- paths.sortBy(getDate)) {
+
+    // parse each file
+    for (path <- paths) {
       println(path.path)
       withLinesIterator(path) { lines =>
         val line = lines.next
@@ -22,36 +27,6 @@ object IndexWebOfKnowledge {
         this.parseFile(line.content, lines)
       }
     }
-  }
-
-  case class Line(code: String, content: String)
-
-  def withLinesIterator[T](wokGzipPath: Path)(f: Iterator[Line] => T): T = {
-    if (!wokGzipPath.isFile || !wokGzipPath.extension.exists(_ == "gz")) {
-      throw new IllegalArgumentException("expected .gz file, found " + wokGzipPath.path)
-    }
-    wokGzipPath.inputStream.acquireAndGet {
-      new GZIPInputStream(_).asInput.lines().withIterator { lines =>
-        f(for (line <- lines) yield new Line(line.substring(0, 2), line.substring(3)))
-      }
-    }
-  }
-
-  private final val NoString: Option[String] = None
-  private final val NoInt: Option[Int] = None
-
-  class File(val name: String) {
-    var copyright = NoString
-    var headerFileType = NoString
-    var creationDate = NoString
-    var version = NoString
-    var productCodes = Buffer.empty[String]
-    var customizationDate = NoString
-    var productionWeeks = NoString
-    var periodicity = NoString
-    var issueCount = NoInt
-    var itemCount = NoInt
-    var lineCount = NoInt
   }
 
   def parseFile(fileName: String, lines: Iterator[Line]) = {
@@ -71,38 +46,6 @@ object IndexWebOfKnowledge {
       case "RE" => // end of file attributes
       case "UI" => this.parseIssue(line.content, lines)
     }
-  }
-
-  class Issue(val identifier: String) {
-    var productionWeeks = NoString
-    var accessionNumber = NoString
-    var sequenceNumber = NoString
-    var documentType = NoString
-    var title = new StringBuilder
-    var titleISO = new StringBuilder
-    var title11Character = NoString
-    var title20Character = NoString
-    var title29Character = NoString
-    var fullProductCoverage = Buffer.empty[String]
-    var selectiveProductCoverage = Buffer.empty[String]
-    var subjectCategories = Buffer.empty[String]
-    var issn = NoString
-    var bookSeriesTitle = new StringBuilder
-    var bookSeriesSubTitle = new StringBuilder
-    var publisherName = NoString
-    var publisherCity = NoString
-    var publisherAddress = new StringBuilder
-    var volume = NoString
-    var issue = NoString
-    var publicationYear = NoInt
-    var publicationDate = NoString
-    var part = NoString
-    var supplement = NoString
-    var specialIssue = NoString
-    var tgaAvailability = NoString
-    var itemCount = NoInt
-    var firstLoadDate = NoString
-    var orderNumber = NoString
   }
 
   def parseIssue(issueIdentifier: String, lines: Iterator[Line]) = {
@@ -160,37 +103,6 @@ object IndexWebOfKnowledge {
         lastCode = line.code
       }
     }
-  }
-
-  class Item(val identifier: String) {
-    var identifierAlternate = NoString
-    var identifierForReferences = NoString
-    var selectiveProductCoverage = Buffer.empty[String]
-    var title = new StringBuilder
-    var reviewedWorkLanguages = Buffer.empty[String]
-    var reviewedWorkAuthors = Buffer.empty[String]
-    var reviewedWorkPublicationYear = NoInt
-    var authors = Buffer.empty[String]
-    var authorRoles = Buffer.empty[String]
-    var authorLastNames = Buffer.empty[String]
-    var authorFirstNames = Buffer.empty[String]
-    var authorNameSuffixes = Buffer.empty[String]
-    var authorAddressIdentifiers = Buffer.empty[String]
-    var authorFullAddresses = Buffer.empty[StringBuilder]
-    var authorEmailAddresses = Buffer.empty[StringBuilder]
-    var corporateAuthor = Buffer.empty[String]
-    var documentType = NoString
-    var beginningPage = NoString
-    var endingPage = NoString
-    var pageCount = NoInt
-    var languages = Buffer.empty[String]
-    var meetingAbstractNumber = NoString
-    var keywords = Buffer.empty[StringBuilder]
-    var keywordsPlus = Buffer.empty[StringBuilder]
-    var fundingAcknowledgementText = Buffer.empty[StringBuilder]
-    var abstractAvailability = NoString
-    var abstractText = Buffer.empty[StringBuilder]
-    var citedReferenceCount = NoInt
   }
 
   def parseItem(itemIdentifier: String, lines: Iterator[Line]) = {
@@ -258,18 +170,6 @@ object IndexWebOfKnowledge {
     }
   }
 
-  class ReprintAddress {
-    var author = NoString
-    var fullAddress = new StringBuilder
-    var organization = NoString
-    var subOrganizations = Buffer.empty[String]
-    var streetAddress = NoString
-    var city = NoString
-    var province = NoString
-    var country = NoString
-    var postalCodes = Buffer.empty[String]
-  }
-
   def parseReprintAddress(lines: Iterator[Line]) = {
     val address = new ReprintAddress
     var lastCode = ""
@@ -292,17 +192,6 @@ object IndexWebOfKnowledge {
         lastCode = line.code
       }
     }
-  }
-
-  class ResearchAddress {
-    var identifier = NoString
-    var fullAddress = new StringBuilder
-    var organization = NoString
-    var subOrganizations = Buffer.empty[String]
-    var city = NoString
-    var province = NoString
-    var country = NoString
-    var postalCodes = Buffer.empty[String]
   }
 
   def parseResearchAddress(lines: Iterator[Line]) = {
@@ -328,11 +217,6 @@ object IndexWebOfKnowledge {
     }
   }
 
-  class FundingAcknowledgement {
-    var organizationName = new StringBuilder
-    var grantNumbers = Buffer.empty[StringBuilder]
-  }
-
   def parseFundingAcknowledgement(lines: Iterator[Line]) = {
     val acknowledgement = new FundingAcknowledgement
     var lastCode = ""
@@ -351,14 +235,6 @@ object IndexWebOfKnowledge {
     }
   }
 
-  class CitedPatent {
-    var assignee = NoString
-    var year = NoInt
-    var number = NoString
-    var country = NoString
-    var patentType = NoString
-  }
-
   def parseCitedPatent(lines: Iterator[Line]) = {
     val citation = new CitedPatent
     for (line <- lines.takeWhile(_.code != "EC")) line.code match {
@@ -368,17 +244,6 @@ object IndexWebOfKnowledge {
       case "/N" => citation.country = Some(line.content)
       case "/C" => citation.patentType = Some(line.content)
     }
-  }
-
-  class CitedReference {
-    var identifier = NoString
-    var identifierForReferences = NoString
-    var author = NoString
-    var year = NoString // there are things like 19AU
-    var work = NoString
-    var volume = NoString
-    var page = NoString
-    var citationType = NoString
   }
 
   def parseCitedReference(lines: Iterator[Line]) = {
@@ -393,5 +258,153 @@ object IndexWebOfKnowledge {
       case "/P" => citation.page = Some(line.content)
       case "/I" => citation.citationType = Some(line.content)
     }
+  }
+}
+
+object WebOfKnowledgeParser {
+  case class Line(code: String, content: String)
+
+  private def withLinesIterator[T](wokGzipPath: Path)(f: Iterator[Line] => T): T = {
+    if (!wokGzipPath.isFile || !wokGzipPath.extension.exists(_ == "gz")) {
+      throw new IllegalArgumentException("expected .gz file, found " + wokGzipPath.path)
+    }
+    wokGzipPath.inputStream.acquireAndGet {
+      new GZIPInputStream(_).asInput.lines().withIterator { lines =>
+        f(for (line <- lines) yield new Line(line.substring(0, 2), line.substring(3)))
+      }
+    }
+  }
+
+  private final val NoString: Option[String] = None
+  private final val NoInt: Option[Int] = None
+
+  class File(val name: String) {
+    var copyright = NoString
+    var headerFileType = NoString
+    var creationDate = NoString
+    var version = NoString
+    var productCodes = Buffer.empty[String]
+    var customizationDate = NoString
+    var productionWeeks = NoString
+    var periodicity = NoString
+    var issueCount = NoInt
+    var itemCount = NoInt
+    var lineCount = NoInt
+  }
+
+  class Issue(val identifier: String) {
+    var productionWeeks = NoString
+    var accessionNumber = NoString
+    var sequenceNumber = NoString
+    var documentType = NoString
+    var title = new StringBuilder
+    var titleISO = new StringBuilder
+    var title11Character = NoString
+    var title20Character = NoString
+    var title29Character = NoString
+    var fullProductCoverage = Buffer.empty[String]
+    var selectiveProductCoverage = Buffer.empty[String]
+    var subjectCategories = Buffer.empty[String]
+    var issn = NoString
+    var bookSeriesTitle = new StringBuilder
+    var bookSeriesSubTitle = new StringBuilder
+    var publisherName = NoString
+    var publisherCity = NoString
+    var publisherAddress = new StringBuilder
+    var volume = NoString
+    var issue = NoString
+    var publicationYear = NoInt
+    var publicationDate = NoString
+    var part = NoString
+    var supplement = NoString
+    var specialIssue = NoString
+    var tgaAvailability = NoString
+    var itemCount = NoInt
+    var firstLoadDate = NoString
+    var orderNumber = NoString
+  }
+
+  class Item(val identifier: String) {
+    var identifierAlternate = NoString
+    var identifierForReferences = NoString
+    var selectiveProductCoverage = Buffer.empty[String]
+    var title = new StringBuilder
+    var reviewedWorkLanguages = Buffer.empty[String]
+    var reviewedWorkAuthors = Buffer.empty[String]
+    var reviewedWorkPublicationYear = NoInt
+    var authors = Buffer.empty[String]
+    var authorRoles = Buffer.empty[String]
+    var authorLastNames = Buffer.empty[String]
+    var authorFirstNames = Buffer.empty[String]
+    var authorNameSuffixes = Buffer.empty[String]
+    var authorAddressIdentifiers = Buffer.empty[String]
+    var authorFullAddresses = Buffer.empty[StringBuilder]
+    var authorEmailAddresses = Buffer.empty[StringBuilder]
+    var corporateAuthor = Buffer.empty[String]
+    var documentType = NoString
+    var beginningPage = NoString
+    var endingPage = NoString
+    var pageCount = NoInt
+    var languages = Buffer.empty[String]
+    var meetingAbstractNumber = NoString
+    var keywords = Buffer.empty[StringBuilder]
+    var keywordsPlus = Buffer.empty[StringBuilder]
+    var fundingAcknowledgementText = Buffer.empty[StringBuilder]
+    var abstractAvailability = NoString
+    var abstractText = Buffer.empty[StringBuilder]
+    var citedReferenceCount = NoInt
+  }
+
+  class ReprintAddress {
+    var author = NoString
+    var fullAddress = new StringBuilder
+    var organization = NoString
+    var subOrganizations = Buffer.empty[String]
+    var streetAddress = NoString
+    var city = NoString
+    var province = NoString
+    var country = NoString
+    var postalCodes = Buffer.empty[String]
+  }
+
+  class ResearchAddress {
+    var identifier = NoString
+    var fullAddress = new StringBuilder
+    var organization = NoString
+    var subOrganizations = Buffer.empty[String]
+    var city = NoString
+    var province = NoString
+    var country = NoString
+    var postalCodes = Buffer.empty[String]
+  }
+
+  class FundingAcknowledgement {
+    var organizationName = new StringBuilder
+    var grantNumbers = Buffer.empty[StringBuilder]
+  }
+
+  class CitedPatent {
+    var assignee = NoString
+    var year = NoInt
+    var number = NoString
+    var country = NoString
+    var patentType = NoString
+  }
+
+  class CitedReference {
+    var identifier = NoString
+    var identifierForReferences = NoString
+    var author = NoString
+    var year = NoString // there are things like 19AU
+    var work = NoString
+    var volume = NoString
+    var page = NoString
+    var citationType = NoString
+  }
+
+  def main(args: Array[String]) = {
+    // TODO: move this main function to another class?
+    val parser = new WebOfKnowledgeParser
+    parser.parse(args.toSeq.map(Path.fromString))
   }
 }
