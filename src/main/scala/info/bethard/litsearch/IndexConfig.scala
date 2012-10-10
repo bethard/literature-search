@@ -19,9 +19,11 @@ import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Query
 import org.apache.lucene.search.TermQuery
 import org.apache.lucene.store.Directory
-import org.apache.lucene.util.Version.{ LUCENE_40 => luceneVersion }
+import org.apache.lucene.util.Version.LUCENE_40
 
 object IndexConfig {
+  val luceneVersion = LUCENE_40
+
   object FieldNames {
     val abstractText = "AbstractText"
     val titleText = "Title"
@@ -37,6 +39,9 @@ object IndexConfig {
   val analyzer = new PerFieldAnalyzerWrapper(
     new EnglishAnalyzer(luceneVersion),
     Map[String, Analyzer](
+      FieldNames.authors -> new WhitespaceAnalyzer(luceneVersion),
+      FieldNames.articleID -> new KeywordAnalyzer,
+      FieldNames.articleIDWhenCited -> new KeywordAnalyzer,
       FieldNames.citedArticleIDs -> new WhitespaceAnalyzer(luceneVersion),
       FieldNames.citationCount -> new KeywordAnalyzer).asJava)
 

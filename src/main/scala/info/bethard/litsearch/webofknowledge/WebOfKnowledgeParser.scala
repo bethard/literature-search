@@ -20,17 +20,18 @@ class WebOfKnowledgeParser {
 
     // parse each file
     for (path <- paths) {
-      println(path.path)
       withLinesIterator(path) { lines =>
         val line = lines.next
         assert(line.code == "FN")
-        this.parseFile(line.content, lines)
+        this.parseFile(new File(path, line.content), lines)
       }
     }
   }
 
-  def parseFile(fileName: String, lines: Iterator[Line]) = {
-    val file = new File(fileName)
+  protected def beginFile(file: File) = {}
+
+  def parseFile(file: File, lines: Iterator[Line]) = {
+    this.beginFile(file)
     for (line <- lines.takeWhile(_.code != "EF")) line.code match {
       case "CC" => file.copyright = Some(line.content)
       case "HF" => file.headerFileType = Some(line.content)
@@ -44,12 +45,14 @@ class WebOfKnowledgeParser {
       case "H6" => file.itemCount = Some(line.content.toInt)
       case "H7" => file.lineCount = Some(line.content.toInt)
       case "RE" => // end of file attributes
-      case "UI" => this.parseIssue(line.content, lines)
+      case "UI" => this.parseIssue(new Issue(file, line.content), lines)
     }
+    this.endFile(file)
   }
 
-  def parseIssue(issueIdentifier: String, lines: Iterator[Line]) = {
-    val issue = new Issue(issueIdentifier)
+  protected def endFile(file: File) = {}
+
+  def parseIssue(issue: Issue, lines: Iterator[Line]) = {
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "RE")) {
       line.code match {
@@ -97,7 +100,7 @@ class WebOfKnowledgeParser {
           case "PA" => issue.publisherAddress.append(line.content)
           case _ => throw new UnsupportedOperationException("%s %s".format(lastCode, line))
         }
-        case "UT" => this.parseItem(line.content, lines)
+        case "UT" => this.parseItem(new Item(issue, line.content), lines)
       }
       if (line.code != "--") {
         lastCode = line.code
@@ -105,8 +108,10 @@ class WebOfKnowledgeParser {
     }
   }
 
-  def parseItem(itemIdentifier: String, lines: Iterator[Line]) = {
-    val item = new Item(itemIdentifier)
+  protected def beginItem(item: Item) = {}
+
+  def parseItem(item: Item, lines: Iterator[Line]) = {
+    this.beginItem(item)
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EX")) {
       line.code match {
@@ -158,66 +163,76 @@ class WebOfKnowledgeParser {
           case "GT" => item.fundingAcknowledgementText.last.append(line.content)
           case "AB" => item.abstractText.last.append(line.content)
         }
-        case "RP" => this.parseReprintAddress(lines)
-        case "C1" => this.parseResearchAddress(lines)
-        case "GB" => this.parseFundingAcknowledgement(lines)
-        case "CP" => this.parseCitedPatent(lines)
-        case "CR" => this.parseCitedReference(lines)
+        case "RP" => item.reprintAddresses += this.parseReprintAddress(lines)
+        case "C1" => item.researchAddresses += this.parseResearchAddress(lines)
+        case "GB" => item.fundingAcknowledgements += this.parseFundingAcknowledgement(lines)
+        case "CP" => item.citedPatents += this.parseCitedPatent(lines)
+        case "CR" => item.citedReferences += this.parseCitedReference(lines)
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+    this.endItem(item)
   }
 
-  def parseReprintAddress(lines: Iterator[Line]) = {
+  protected def endItem(item: Item) = {}
+
+  def parseReprintAddress(lines: Iterator[Line]): ReprintAddress = {
     val address = new ReprintAddress
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
         case "RA" => address.author = Some(line.content)
         case "NF" => address.fullAddress.append(line.content)
-        case "NC" => address.organization = Some(line.content)
+        case "NC" => address.organization.append(line.content)
         case "ND" => address.subOrganizations += line.content
-        case "NN" => address.streetAddress = Some(line.content)
+        case "NN" => address.streetAddress.append(line.content)
         case "NY" => address.city = Some(line.content)
         case "NP" => address.province = Some(line.content)
         case "NU" => address.country = Some(line.content)
         case "NZ" => address.postalCodes.append(line.content)
         case "--" => lastCode match {
           case "NF" => address.fullAddress.append(line.content)
+          case "NC" => address.organization.append(line.content)
+          case "NN" => address.streetAddress.append(line.content)
         }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+    address
   }
 
-  def parseResearchAddress(lines: Iterator[Line]) = {
+  def parseResearchAddress(lines: Iterator[Line]): ResearchAddress = {
     val address = new ResearchAddress
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EA")) {
       line.code match {
         case "CN" => address.identifier = Some(line.content)
         case "NF" => address.fullAddress.append(line.content)
-        case "NC" => address.organization = Some(line.content)
+        case "NC" => address.organization.append(line.content)
         case "ND" => address.subOrganizations += line.content
+        case "NN" => address.streetAddress.append(line.content)
         case "NY" => address.city = Some(line.content)
         case "NP" => address.province = Some(line.content)
         case "NU" => address.country = Some(line.content)
         case "NZ" => address.postalCodes.append(line.content)
         case "--" => lastCode match {
           case "NF" => address.fullAddress.append(line.content)
+          case "NC" => address.organization.append(line.content)
+          case "NN" => address.streetAddress.append(line.content)
         }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+    address
   }
 
-  def parseFundingAcknowledgement(lines: Iterator[Line]) = {
+  def parseFundingAcknowledgement(lines: Iterator[Line]): FundingAcknowledgement = {
     val acknowledgement = new FundingAcknowledgement
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "GX")) {
@@ -233,9 +248,10 @@ class WebOfKnowledgeParser {
         lastCode = line.code
       }
     }
+    acknowledgement
   }
 
-  def parseCitedPatent(lines: Iterator[Line]) = {
+  def parseCitedPatent(lines: Iterator[Line]): CitedPatent = {
     val citation = new CitedPatent
     for (line <- lines.takeWhile(_.code != "EC")) line.code match {
       case "/A" => citation.assignee = Some(line.content)
@@ -244,9 +260,10 @@ class WebOfKnowledgeParser {
       case "/N" => citation.country = Some(line.content)
       case "/C" => citation.patentType = Some(line.content)
     }
+    citation
   }
 
-  def parseCitedReference(lines: Iterator[Line]) = {
+  def parseCitedReference(lines: Iterator[Line]): CitedReference = {
     val citation = new CitedReference
     for (line <- lines.takeWhile(_.code != "EC"); if line.content != "") line.code match {
       case "RS" => citation.identifier = Some(line.content)
@@ -258,6 +275,7 @@ class WebOfKnowledgeParser {
       case "/P" => citation.page = Some(line.content)
       case "/I" => citation.citationType = Some(line.content)
     }
+    citation
   }
 }
 
@@ -278,7 +296,7 @@ object WebOfKnowledgeParser {
   private final val NoString: Option[String] = None
   private final val NoInt: Option[Int] = None
 
-  class File(val name: String) {
+  class File(val path: Path, val name: String) {
     var copyright = NoString
     var headerFileType = NoString
     var creationDate = NoString
@@ -292,7 +310,7 @@ object WebOfKnowledgeParser {
     var lineCount = NoInt
   }
 
-  class Issue(val identifier: String) {
+  class Issue(val file: File, val identifier: String) {
     var productionWeeks = NoString
     var accessionNumber = NoString
     var sequenceNumber = NoString
@@ -324,7 +342,7 @@ object WebOfKnowledgeParser {
     var orderNumber = NoString
   }
 
-  class Item(val identifier: String) {
+  class Item(val issue: Issue, val identifier: String) {
     var identifierAlternate = NoString
     var identifierForReferences = NoString
     var selectiveProductCoverage = Buffer.empty[String]
@@ -353,14 +371,19 @@ object WebOfKnowledgeParser {
     var abstractAvailability = NoString
     var abstractText = Buffer.empty[StringBuilder]
     var citedReferenceCount = NoInt
+    var reprintAddresses = Buffer.empty[ReprintAddress]
+    var researchAddresses = Buffer.empty[ResearchAddress]
+    var fundingAcknowledgements = Buffer.empty[FundingAcknowledgement]
+    var citedPatents = Buffer.empty[CitedPatent]
+    var citedReferences = Buffer.empty[CitedReference]
   }
 
   class ReprintAddress {
     var author = NoString
     var fullAddress = new StringBuilder
-    var organization = NoString
+    var organization = new StringBuilder
     var subOrganizations = Buffer.empty[String]
-    var streetAddress = NoString
+    var streetAddress = new StringBuilder
     var city = NoString
     var province = NoString
     var country = NoString
@@ -370,8 +393,9 @@ object WebOfKnowledgeParser {
   class ResearchAddress {
     var identifier = NoString
     var fullAddress = new StringBuilder
-    var organization = NoString
+    var organization = new StringBuilder
     var subOrganizations = Buffer.empty[String]
+    var streetAddress = new StringBuilder
     var city = NoString
     var province = NoString
     var country = NoString
@@ -400,11 +424,5 @@ object WebOfKnowledgeParser {
     var volume = NoString
     var page = NoString
     var citationType = NoString
-  }
-
-  def main(args: Array[String]) = {
-    // TODO: move this main function to another class?
-    val parser = new WebOfKnowledgeParser
-    parser.parse(args.toSeq.map(Path.fromString))
   }
 }
