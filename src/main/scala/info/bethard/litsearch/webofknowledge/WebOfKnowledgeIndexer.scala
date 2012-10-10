@@ -21,20 +21,33 @@ object WebOfKnowledgeIndexer {
       throw new IllegalArgumentException(message.format(this.getClass.getName))
     }
     val indexPath = Path.fromString(args.head)
-    if (indexPath.exists) {
-      throw new IllegalArgumentException("directory already exists: " + indexPath.path)
-    }
     val wokPaths = args.toSeq.tail.map(Path.fromString)
     val indexer = new WebOfKnowledgeIndexer(indexPath)
-    indexer.parse(wokPaths)
+    try {
+      indexer.parse(wokPaths)
+    } finally {
+      indexer.close
+    }
   }
 }
 
 class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with Closeable {
   import info.bethard.litsearch.webofknowledge.WebOfKnowledgeParser._
 
-  var indexDirectory: Directory = null
-  var indexWriter: IndexWriter = null
+  val config = new IndexWriterConfig(IndexConfig.luceneVersion, IndexConfig.analyzer)
+  config.setOpenMode(IndexWriterConfig.OpenMode.CREATE)
+  config.setRAMBufferSizeMB(1000)
+  val indexWriter = new IndexWriter(FSDirectory.open(indexPath.fileOption.get), config)
+
+  override def close = this.indexWriter.close
+
+  override def beginFile(file: File) = {
+    println(file.name)
+  }
+
+  override def endFile(file: File) = {
+    this.indexWriter.commit
+  }
 
   object Fields {
     import info.bethard.litsearch.IndexConfig.FieldNames
@@ -46,20 +59,6 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
     val articleIDWhenCited = new StringField(FieldNames.articleIDWhenCited, "", Field.Store.YES)
     val citedArticleIDs = new TextField(FieldNames.citedArticleIDs, "", Field.Store.YES)
     val year = new IntField(FieldNames.year, -1, Field.Store.YES)
-  }
-
-  override def close = this.indexWriter.close
-
-  override def beginFile(file: File) = {
-    println(file.name)
-    val config = new IndexWriterConfig(IndexConfig.luceneVersion, IndexConfig.analyzer)
-    this.indexDirectory = FSDirectory.open(this.indexPath.fileOption.get)
-    this.indexWriter = IndexConfig.newIndexWriter(this.indexDirectory)
-  }
-
-  override def endFile(file: File) = {
-    this.indexWriter.close
-    this.indexDirectory.close
   }
 
   override def endItem(item: Item) = {
@@ -110,5 +109,8 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
       Fields.citedArticleIDs.setStringValue(ids.mkString(" "))
       document.add(Fields.citedArticleIDs)
     }
+
+    // add the document to the index
+    this.indexWriter.addDocument(document)
   }
 }
