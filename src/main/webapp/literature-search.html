@@ -34,9 +34,6 @@
 		clear: both;
 		padding-top: 2em;
 	}
-	#more {
-		display: none;
-	}
 	#ajax-loader {
 		display: none;
 	}
@@ -75,14 +72,11 @@
 <h1>Literature Search Demo</h1>
 
 <div>
-<form class="lift:form.ajax">
-<div class="lift:LiteratureSearch">
+<form class="lift:LiteratureSearch?form=post">
 
 <div id="search-query">
 <input type="text" id="query" name="query" size="80" />
-<input type="submit" value="Search the Web of Knowledge" />
-<input type="hidden" name="verify" />
-<img alt="" id="ajax-loader" src="/images/ajax-loader.gif"/>
+<input type="submit" id="submit" value="Search the Web of Knowledge" />
 </div>
 
 <div id="search-weights">
@@ -108,9 +102,8 @@
 
 
 <div id="results"></div>
-<input type="submit" id="more" value="" />
+<input type="submit" id="more" value="More" />
 
-</div>
 </form>
 </div>
 
