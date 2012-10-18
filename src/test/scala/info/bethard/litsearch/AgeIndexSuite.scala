@@ -19,7 +19,7 @@ class AgeIndexSuite extends IndexSuiteBase {
         Seq(year -> "1993"))
     } {
       // construct the index of ages
-      val index = new AgeIndex(2020)
+      val index = new AgeIndex(2020, identity)
 
       // check the values of the ages
       val searcher = new IndexSearcher(reader)

@@ -2,7 +2,6 @@ package info.bethard.litsearch.liftweb.snippet
 
 import java.io.File
 
-import scala.Array.canBuildFrom
 import scala.xml.NodeSeq
 import scala.xml.Text
 
@@ -16,6 +15,7 @@ import info.bethard.litsearch.AgeIndex
 import info.bethard.litsearch.CitationCountIndex
 import info.bethard.litsearch.CombinedIndex
 import info.bethard.litsearch.IndexConfig
+import info.bethard.litsearch.QueryFunctions
 import info.bethard.litsearch.TitleAbstractTextIndex
 import net.liftweb.common.Box
 import net.liftweb.common.Box.option2Box
@@ -47,9 +47,10 @@ object LiteratureSearch {
 
   val wokURLBase = "http://apps.webofknowledge.com/InboundService.do?product=WOS&action=retrieve&mode=FullRecord&UT="
 
+  val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 250f)
   val textIndex = new TitleAbstractTextIndex
-  val citationCountIndex = new CitationCountIndex
-  val ageIndex = new AgeIndex(2012)
+  val citationCountIndex = new CitationCountIndex(logThenScale)
+  val ageIndex = new AgeIndex(2012, logThenScale)
 
   val articlesReader = open("index.articles")
   val citationCountReader = open("index.citation_count")

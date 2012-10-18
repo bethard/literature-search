@@ -23,10 +23,10 @@ class CombinedIndexSuite extends IndexSuiteBase {
       // construct the index of citation counts
       CitationCountIndex.buildFrom(tempReader, citationCountIndexDirectory)
       val citationCountReader = DirectoryReader.open(citationCountIndexDirectory)
-      val citationCountIndex = new CitationCountIndex
+      val citationCountIndex = new CitationCountIndex(identity)
 
       // construct the index of age counts
-      val ageIndex = new AgeIndex(2012)
+      val ageIndex = new AgeIndex(2012, identity)
 
       // construct the combined index
       val index = new CombinedIndex(citationCountIndex -> 10f, ageIndex -> -0.5f)

@@ -50,7 +50,7 @@ class CitationCountIndexSuite extends IndexSuiteBase {
       CitationCountIndex.buildFrom(tempReader, tempDir)
 
       // check the values of the citation counts
-      val index = new CitationCountIndex
+      val index = new CitationCountIndex(identity)
       val reader = DirectoryReader.open(tempDir)
       val searcher = new IndexSearcher(reader)
       val query = index.createQuery(null) // shouldn't use query text

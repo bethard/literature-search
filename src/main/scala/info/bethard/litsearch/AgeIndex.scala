@@ -6,11 +6,13 @@ import org.apache.lucene.store.Directory
 import org.apache.lucene.queries.function.FunctionQuery
 import org.apache.lucene.queries.function.valuesource.IntFieldSource
 import org.apache.lucene.queries.function.valuesource.LinearFloatFunction
+import org.apache.lucene.queries.function.ValueSource
 
-class AgeIndex(currentYear: Int) extends Index {
+class AgeIndex(currentYear: Int, scoreAdjuster: (ValueSource => ValueSource)) extends Index {
 
   override def createQuery(queryText: String): Query = {
-    val intFieldSource = new IntFieldSource(IndexConfig.FieldNames.year)
-    new FunctionQuery(new LinearFloatFunction(intFieldSource, -1f, currentYear.toFloat))
+    val yearSource = new IntFieldSource(IndexConfig.FieldNames.year)
+    val ageSource = new LinearFloatFunction(yearSource, -1f, currentYear.toFloat)
+    new FunctionQuery(scoreAdjuster(ageSource))
   }
 }

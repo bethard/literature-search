@@ -22,19 +22,13 @@ import org.apache.lucene.search.TotalHitCountCollector
 import org.apache.lucene.queries.function.valuesource.SimpleFloatFunction
 import org.apache.lucene.queries.function.ValueSource
 import org.apache.lucene.queries.function.FunctionValues
+import org.apache.lucene.queries.function.valuesource.ScaleFloatFunction
 
-class CitationCountIndex extends Index {
+class CitationCountIndex(scoreAdjuster: (ValueSource => ValueSource)) extends Index {
 
   override def createQuery(queryText: String): Query = {
-    new FunctionQuery(new LogFloatFunction(new IntFieldSource(IndexConfig.FieldNames.citationCount)))
-  }
-}
-
-class LogFloatFunction(source: ValueSource) extends SimpleFloatFunction(source) {
-  override def name: String = "log"
-  override def func(doc: Int, vals: FunctionValues): Float = {
-    val value = vals.doubleVal(doc)
-    if (value == 0.0) 0.0f else math.log(value).toFloat
+    val countSource = new IntFieldSource(IndexConfig.FieldNames.citationCount)
+    new FunctionQuery(scoreAdjuster(countSource))
   }
 }
 

@@ -78,9 +78,10 @@ object LearnFeatureWeights {
       new File(options.getModelDir, "training-data-%d.svmmap-index".format(iteration))
 
     // create indexes from command line parameters
+    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 250f)
     val textIndex = new TitleAbstractTextIndex
-    val citationCountIndex = new CitationCountIndex
-    val ageIndex = new AgeIndex(2012)
+    val citationCountIndex = new CitationCountIndex(logThenScale)
+    val ageIndex = new AgeIndex(2012, logThenScale)
 
     // open the reader and searcher
     val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
@@ -227,7 +228,7 @@ object LearnFeatureWeights {
         """print " ".join(map(str, model.w))"""
       val output = Process(Seq("python", "-c", printWeightsCommand)).lines.mkString
       weights = output.split("\\s+").map(_.toFloat).toSeq
-      val maxWeight = weights.max
+      val maxWeight = weights.map(math.abs).max
       weights = weights.map(_ / maxWeight)
     }
     this.logger.info("Final weights: " + weights)
