@@ -77,8 +77,10 @@ object LearnFeatureWeights {
     val getTrainingDataIndexFile = (iteration: Int) =>
       new File(options.getModelDir, "training-data-%d.svmmap-index".format(iteration))
 
+    // scale to [0, 500] since that's about the range that the text queries return
+    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 500f)
+
     // create indexes from command line parameters
-    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 250f)
     val textIndex = new TitleAbstractTextIndex
     val citationCountIndex = new CitationCountIndex(logThenScale)
     val ageIndex = new AgeIndex(2012, logThenScale)

@@ -41,13 +41,15 @@ object LiteratureSearch {
   private object results extends SessionVar[Box[TopDocs]](Empty)
 
   private object nHits extends SessionVar(10)
-  private object textWeight extends SessionVar("0.47")
-  private object citationCountWeight extends SessionVar("1.0")
-  private object ageWeight extends SessionVar("-0.12")
+  private object textWeight extends SessionVar("1.0")
+  private object citationCountWeight extends SessionVar("0.1")
+  private object ageWeight extends SessionVar("-0.2")
 
   val wokURLBase = "http://apps.webofknowledge.com/InboundService.do?product=WOS&action=retrieve&mode=FullRecord&UT="
 
-  val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 250f)
+  // scale to match training
+  val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 500f)
+
   val textIndex = new TitleAbstractTextIndex
   val citationCountIndex = new CitationCountIndex(logThenScale)
   val ageIndex = new AgeIndex(2012, logThenScale)
