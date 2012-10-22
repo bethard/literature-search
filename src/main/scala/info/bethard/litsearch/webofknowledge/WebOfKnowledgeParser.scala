@@ -1,14 +1,15 @@
 package info.bethard.litsearch.webofknowledge
 
 import java.util.zip.GZIPInputStream
-
 import scala.collection.mutable.Buffer
-
 import scalax.file.Path
 import scalax.io.JavaConverters.asInputConverter
+import java.util.logging.Logger
 
 class WebOfKnowledgeParser {
   import WebOfKnowledgeParser._
+
+  private val logger = Logger.getLogger(this.getClass.getName)
 
   def parse(directories: Seq[Path]) = {
     // get all files in the directories, and sort them by date
@@ -128,7 +129,15 @@ class WebOfKnowledgeParser {
         case "RL" => item.reviewedWorkLanguages += line.content
         case "RW" => item.reviewedWorkAuthors += line.content
         case "RY" => item.reviewedWorkPublicationYear =
-          if (line.content.matches("^\\s+$")) None else Some(line.content.toInt)
+          try {
+            Some(line.content.toInt)
+          } catch {
+            case e: NumberFormatException => {
+              val message = "Skipping invalid reviewed work publication year '%s'"
+              this.logger.warning(message.format(line.content))
+              None
+            }
+          }
         case "AU" => item.authors += line.content
         case "RO" => item.authorRoles += line.content
         case "LN" => item.authorLastNames += line.content
@@ -428,5 +437,14 @@ object WebOfKnowledgeParser {
     var volume = NoString
     var page = NoString
     var citationType = NoString
+  }
+
+  def main(args: Array[String]) = {
+    if (args.length < 1) {
+      val message = "usage: java %s wok-dir [wok-dir ...]"
+      throw new IllegalArgumentException(message.format(this.getClass.getName))
+    }
+    val parser = new WebOfKnowledgeParser
+    parser.parse(args.map(Path.fromString))
   }
 }
