@@ -444,7 +444,11 @@ object WebOfKnowledgeParser {
       val message = "usage: java %s wok-dir [wok-dir ...]"
       throw new IllegalArgumentException(message.format(this.getClass.getName))
     }
-    val parser = new WebOfKnowledgeParser
+    val parser = new WebOfKnowledgeParser {
+      override def beginFile(file: File) {
+        println(file.name)
+      }
+    }
     parser.parse(args.map(Path.fromString))
   }
 }
