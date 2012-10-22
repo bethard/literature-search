@@ -127,7 +127,8 @@ class WebOfKnowledgeParser {
         case "TI" => item.title.append(line.content)
         case "RL" => item.reviewedWorkLanguages += line.content
         case "RW" => item.reviewedWorkAuthors += line.content
-        case "RY" => item.reviewedWorkPublicationYear = Some(line.content.toInt)
+        case "RY" => item.reviewedWorkPublicationYear =
+          if (line.content.matches("^\\s+$")) None else Some(line.content.toInt)
         case "AU" => item.authors += line.content
         case "RO" => item.authorRoles += line.content
         case "LN" => item.authorLastNames += line.content
@@ -163,13 +164,16 @@ class WebOfKnowledgeParser {
           case "GT" => item.fundingAcknowledgementText.last.append(line.content)
           case "AB" => item.abstractText.last.append(line.content)
         }
+        case "ET" => lastCode match {
+          case "TI" => item.title.append(line.content)
+        }
         case "RP" => item.reprintAddresses += this.parseReprintAddress(lines)
         case "C1" => item.researchAddresses += this.parseResearchAddress(lines)
         case "GB" => item.fundingAcknowledgements += this.parseFundingAcknowledgement(lines)
         case "CP" => item.citedPatents += this.parseCitedPatent(lines)
         case "CR" => item.citedReferences += this.parseCitedReference(lines)
       }
-      if (line.code != "--") {
+      if (line.code != "--" && line.code != "ET") {
         lastCode = line.code
       }
     }
