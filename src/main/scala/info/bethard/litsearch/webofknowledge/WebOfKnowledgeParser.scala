@@ -11,7 +11,7 @@ class WebOfKnowledgeParser {
 
   private val logger = Logger.getLogger(this.getClass.getName)
 
-  def parse(directories: Seq[Path]) = {
+  def parse(directories: Seq[Path]): Unit = {
     // get all files in the directories, and sort them by date
     val paths = directories.flatMap(_.children()).sortBy {
       withLinesIterator(_) {
@@ -29,8 +29,6 @@ class WebOfKnowledgeParser {
     }
   }
 
-  protected def beginFile(file: File) = {}
-
   def parseFile(file: File, lines: Iterator[Line]) = {
     this.beginFile(file)
     for (line <- lines.takeWhile(_.code != "EF")) line.code match {
@@ -46,24 +44,32 @@ class WebOfKnowledgeParser {
       case "H6" => file.itemCount = Some(line.content.toInt)
       case "H7" => file.lineCount = Some(line.content.toInt)
       case "RE" => // end of file attributes
-      case "UI" => this.parseIssue(new Issue(file, line.content), lines)
+      case "UI" => {
+        this.endFileInfo(file)
+        this.parseIssue(new Issue(file, line.content), lines)
+      }
     }
     this.endFile(file)
   }
+  
+  protected def beginFile(file: File) = {}
+
+  protected def endFileInfo(file: File) = {}
 
   protected def endFile(file: File) = {}
 
   def parseIssue(issue: Issue, lines: Iterator[Line]) = {
+    this.beginIssue(issue)
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "RE")) {
       line.code match {
-        case "T1" => line.content.charAt(0) match {
-          case 'N' => // no change
-          case 'C' => // TODO: issue changed, but article records may not be included
-          case 'D' => // TODO: delete entire issue and all articles
-          case 'R' => // TODO: issue and all articles will be replaced
-          case 'I' => // TODO: (undocumented) insert new issue maybe?
-        }
+        case "T1" => issue.transaction = Some(line.content.charAt(0) match {
+          case 'D' => IssueTransaction.Delete
+          case 'R' => IssueTransaction.Replace
+          case 'C' => IssueTransaction.Change
+          case 'N' => IssueTransaction.NoAction
+          case 'I' => IssueTransaction.Insert
+        })
         case "PW" => issue.productionWeeks = Some(line.content)
         case "GA" => issue.accessionNumber = Some(line.content)
         case "SQ" => issue.sequenceNumber = Some(line.content)
@@ -101,26 +107,34 @@ class WebOfKnowledgeParser {
           case "PA" => issue.publisherAddress.append(line.content)
           case _ => throw new UnsupportedOperationException("%s %s".format(lastCode, line))
         }
-        case "UT" => this.parseItem(new Item(issue, line.content), lines)
+        case "UT" => {
+          this.endIssueInfo(issue)
+          this.parseItem(new Item(issue, line.content), lines)
+        }
       }
       if (line.code != "--") {
         lastCode = line.code
       }
     }
+    this.endIssue(issue)
   }
+  
+  protected def beginIssue(issue: Issue) = {}
 
-  protected def beginItem(item: Item) = {}
+  protected def endIssueInfo(issue: Issue) = {}
+
+  protected def endIssue(issue: Issue) = {}
 
   def parseItem(item: Item, lines: Iterator[Line]) = {
     this.beginItem(item)
     var lastCode = ""
     for (line <- lines.takeWhile(_.code != "EX")) {
       line.code match {
-        case "T2" => line.content.charAt(0) match {
-          case 'R' => // TODO: replace or insert article
-          case 'C' => // TODO: modify article
-          case 'I' => // TODO: (undocumented) insert new item maybe?
-        }
+        case "T2" => item.transaction = Some(line.content.charAt(0) match {
+          case 'R' => ItemTransaction.Replace
+          case 'C' => ItemTransaction.Change
+          case 'I' => ItemTransaction.Insert
+        })
         case "T3" => // specifies what changed, but full record will be present
         case "AR" => item.identifierAlternate = Some(line.content)
         case "T9" => item.identifierForReferences = Some(line.content)
@@ -188,6 +202,8 @@ class WebOfKnowledgeParser {
     }
     this.endItem(item)
   }
+
+  protected def beginItem(item: Item) = {}
 
   protected def endItem(item: Item) = {}
 
@@ -322,8 +338,45 @@ object WebOfKnowledgeParser {
     var itemCount = NoInt
     var lineCount = NoInt
   }
+  
+  sealed trait IssueTransaction
+  object IssueTransaction {
+    
+    /**
+     * According to the documentation: "for delete, when entire issue is deleted" 
+     */
+    object Delete extends IssueTransaction
+
+    /**
+     * According to the documentation: "for replace, remove original 'UI' and 'UT' information and
+     * replace with new 'UI' and all corresponding 'UT' information.  Assume Issue change."
+     */
+    object Replace extends IssueTransaction
+
+    /**
+     * According to the documentation: "for change, when issue level data is updated" and "Any
+     * element change within an issue will result in replacement of the complete issue data
+     * (excluding articles)."
+     */
+    object Change extends IssueTransaction
+
+    /**
+     * According to the documentation: "for no action, indicates no issue level changes but
+     * article data is modified."
+     */
+    object NoAction extends IssueTransaction
+    
+    /**
+     * Undocumented transaction (I), present in data.
+     * 
+     * Best guess is that it means "insert" - for the example that I checked, there was only one
+     * instance of that issue. 
+     */
+    object Insert extends IssueTransaction
+  }
 
   class Issue(val file: File, val identifier: String) {
+    var transaction: Option[IssueTransaction] = None
     var productionWeeks = NoString
     var accessionNumber = NoString
     var sequenceNumber = NoString
@@ -354,8 +407,34 @@ object WebOfKnowledgeParser {
     var firstLoadDate = NoString
     var orderNumber = NoString
   }
+  
+  sealed trait ItemTransaction
+  object ItemTransaction {
+    
+    /**
+     * According to the documentation: "for replace, when an article has not changed under a
+     * "replace" issue transaction. Inserted articles also have R. Deleted articles are not
+     * included under a "replace" issue transaction."
+     */
+    object Replace extends ItemTransaction
+    
+    /**
+     * According to the documentation: "for change, when article level data is updated.  Updated
+     * articles under a "replace" issue transaction will also have C" and "Any element change
+     * within an article will result in replacement of the complete article"
+     */
+    object Change extends ItemTransaction
+    
+    /**
+     * Undocumented transaction (I), present in data.
+     * 
+     * Best guess is that it means "insert"
+     */
+    object Insert extends ItemTransaction
+  }
 
   class Item(val issue: Issue, val identifier: String) {
+    var transaction: Option[ItemTransaction] = None
     var identifierAlternate = NoString
     var identifierForReferences = NoString
     var selectiveProductCoverage = Buffer.empty[String]

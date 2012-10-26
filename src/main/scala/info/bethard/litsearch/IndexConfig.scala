@@ -27,6 +27,7 @@ object IndexConfig {
   object FieldNames {
     val abstractText = "AbstractText"
     val titleText = "Title"
+    val sourceID = "SourceID"
     val sourceTitleText = "SourceTitle"
     val authors = "Authors"
     val articleID = "ID"
