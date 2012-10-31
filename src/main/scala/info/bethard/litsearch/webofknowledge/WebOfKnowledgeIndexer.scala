@@ -37,7 +37,7 @@ object WebOfKnowledgeIndexer {
 
 class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with Closeable {
   import info.bethard.litsearch.webofknowledge.WebOfKnowledgeParser._
-  
+
   val logger = Logger.getLogger(this.getClass.getName)
 
   val config = new IndexWriterConfig(IndexConfig.luceneVersion, IndexConfig.analyzer)
@@ -61,17 +61,15 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
   override def beginFile(file: File) = {
     this.logger.info(file.name)
   }
-  
+
   override def endIssueInfo(issue: Issue) = {
     import info.bethard.litsearch.IndexConfig.FieldNames
     import IssueTransaction._
-    issue.transaction.map(_ match {
+    issue.transaction.foreach(_ match {
       case NoAction | Insert => // issue will be inserted normally
-      case Delete | Replace => {
-        val docsBefore = this.indexWriter.maxDoc();
+      case Replace => // items will be replaced individually
+      case Delete => {
         this.indexWriter.deleteDocuments(new Term(FieldNames.sourceID, issue.identifier.trim))
-        val docsDeleted = docsBefore - this.indexWriter.maxDoc()
-        this.logger.info("Deleted all %d item(s) from issue %s".format(docsDeleted, issue.identifier))
       }
       case Change => {
         // TODO: find all instances of issue ID, and update issue metadata (e.g. SourceTitle)
@@ -82,25 +80,12 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
   }
 
   override def endItem(item: Item) = {
-    // delete the item first if necessary
-    import ItemTransaction._
-    item.transaction.map(_ match {
-      case Insert => // item will be inserted normally (below)
-      case Replace | Change => {
-        val docsBefore = this.indexWriter.maxDoc()
-        this.indexWriter.deleteDocuments(new Term(FieldNames.articleID, item.identifier.trim))
-        val docsDeleted = docsBefore - this.indexWriter.maxDoc()
-        this.logger.info("Deleted %d item(s) for item %s".format(docsDeleted, item.identifier))
-      } 
-    })
-    
-    
     val document = new Document
 
     // set article ID
     Fields.articleID.setStringValue(item.identifier.trim)
     document.add(Fields.articleID)
-    
+
     // set source ID
     Fields.sourceID.setStringValue(item.issue.identifier.trim)
     document.add(Fields.sourceID)
@@ -139,7 +124,7 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
       Fields.abstractText.setStringValue(abstractText)
       document.add(Fields.abstractText)
     }
-
+    
     // set IDs of cited articles, putting whitespace in between (if present)
     val ids = item.citedReferences.flatMap(_.identifierForReferences.iterator)
     if (!ids.isEmpty) {
@@ -147,11 +132,8 @@ class WebOfKnowledgeIndexer(indexPath: Path) extends WebOfKnowledgeParser with C
       document.add(Fields.citedArticleIDs)
     }
 
-    // add the document to the index
-    this.indexWriter.addDocument(document)
-  }
-  
-  override def endIssue(issue: Issue) = {
-    this.indexWriter.commit
+    // add the document to the index (removing it first if it exists)
+    val idTerm = new Term(FieldNames.articleID, item.identifier.trim)
+    this.indexWriter.updateDocument(idTerm, document)
   }
 }
