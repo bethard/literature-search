@@ -34,11 +34,8 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("model-dir"), defaultValue = Array("target/model"))
     def getModelDir: File
 
-    @CliOption(longName = Array("article-index"))
-    def getArticleIndex: File
-
-    @CliOption(longName = Array("citation-count-index"))
-    def getCitationCountIndex: File
+    @CliOption(longName = Array("indexes"))
+    def getIndexFiles: java.util.List[File]
 
     @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
@@ -86,9 +83,9 @@ object LearnFeatureWeights {
     val ageIndex = new AgeIndex(2012, logThenScale)
 
     // open the reader and searcher
-    val articlesReader = DirectoryReader.open(FSDirectory.open(options.getArticleIndex))
-    val citationCountReader = DirectoryReader.open(FSDirectory.open(options.getCitationCountIndex))
-    val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
+    val indexFiles = options.getIndexFiles.asScala
+    val subReaders = for (f <- indexFiles) yield DirectoryReader.open(FSDirectory.open(f))
+    val reader = new ParallelCompositeReader(subReaders: _*)
     val searcher = new IndexSearcher(reader)
 
     // determine the documents for training
