@@ -77,7 +77,7 @@ object SubIndexWriter {
           var time = System.nanoTime
           
           // write each selected document from the reader to the writer
-          for (docID <- docIDs.take(100)) {
+          for (docID <- docIDs) {
             // FIXME: this workaround is necessary or the the year tokens don't get indexed
             val fields = for (field <- reader.document(docID).asScala) yield {
               if (field.name() == FieldNames.year) {
