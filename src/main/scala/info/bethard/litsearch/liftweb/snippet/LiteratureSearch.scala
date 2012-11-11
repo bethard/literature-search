@@ -124,16 +124,19 @@ object LiteratureSearch {
       val title = doc.get(IndexConfig.FieldNames.titleText)
       val source = doc.get(IndexConfig.FieldNames.sourceTitleText)
       val year = doc.get(IndexConfig.FieldNames.year)
-      val authors = doc.get(IndexConfig.FieldNames.authors).split(" ").map { authorString =>
-        authorString.split("_") match {
-          case Array() => ""
-          case Array(lastName, initials) => {
-            val parts = initials.map(_.toUpper + ".") :+ (lastName.head.toUpper + lastName.tail)
-            parts.mkString(" ")
-          }
-          case _ => {
-            System.err.printf("Unexpected author format: \"%s\"\n", authorString)
-            authorString
+      val authors = Option(doc.get(IndexConfig.FieldNames.authors)) match {
+        case None => Array.empty[String]
+        case Some(string) => for (authorString <- string.split(" ")) yield {
+          authorString.split("_+") match {
+            case Array(lastName) => lastName.head.toUpper + lastName.tail
+            case Array(lastName, initials) => {
+              val parts = initials.map(_.toUpper + ".") :+ (lastName.head.toUpper + lastName.tail)
+              parts.mkString(" ")
+            }
+            case _ => {
+              System.err.printf("Unexpected author format: \"%s\"\n", authorString)
+              authorString
+            }
           }
         }
       }
