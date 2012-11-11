@@ -1,0 +1,70 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:lift="http://liftweb.net/">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <meta name="description" content="" />
+    <meta name="keywords" content="" />
+    <title>About the Literature Search Demo</title>
+    <style class="lift:CSS.blueprint"></style>
+    <style class="lift:CSS.fancyType"></style>
+    <style type="text/css">
+    /* <![CDATA[ */
+    body {
+    	margin: 2em;
+    }
+    /* ]]> */
+	</style>
+</head>
+<body>
+
+<h1>About the Literature Search Demo</h1>
+<p>
+This is a demo of a literature search system over the Thomson Reuters Web of Knowledge.
+The demo runs over a subset of the Web of Knowledge that is targeted at prematurity research,
+though the same system is capable of running over the entire dataset.
+</p>
+
+<h2>Better Search from Citation Analysis</h2>
+<p>
+Most literature search systems you're already familiar with
+rely heavily on the keywords you type into the search box.
+Such keywords are useful, but far from a complete description of a scientific query.
+Good researchers rely on many additional factors to find good research articles:
+the number of times an article was cited,
+how recently an article was published,
+the impact of the journal in which the article was published,
+etc.
+So a good literature search system should incorporate all these factors too.
+But how can a computer know how to put all these factors together effectively?
+</p>
+<p>
+Our answer, and one of the key innovations of this literature search demo,
+is to teach the computer to <i>learn</i> to combine the factors
+by observing <i>citation patterns</i> in research articles.
+The system looks at the bibliographies of research articles,
+and analyzes them for clues about how the researchers decided on what to cite.
+For example, if researchers tend to reference articles that are highly cited,
+then the system learns to boost articles with large citation counts.
+Or, if researchers tend to reference articles published recently,
+then the system learns to boost articles that were published a small number of years ago. 
+</p>
+<p>
+The result is a smarter literature search system that makes more accurate recommendations for you. 
+</p>
+
+<h2>Personalize Your Search System</h2>
+<p>
+The main search interface of the demo shows sliders for each literature search factor
+(citation count, age, etc.).
+The default weights are the result of training the system on a set of research articles on prematurity.
+You can change these weights to fit your needs, for example,
+focusing more on highly cited articles by increasing the citation count weight,
+or getting rid of the bias towards recent articles by moving the age weight back to zero.
+</p>
+<p>
+But why fiddle with weights, when the system can do that for you!
+Just go to the <a href="train.html">trainer</a> page,
+give it a list of articles that are good examples of your citation practices,
+and it will give you back a set of weights which defines your own personalized search system.
+</p>
+</body>
+</html>
