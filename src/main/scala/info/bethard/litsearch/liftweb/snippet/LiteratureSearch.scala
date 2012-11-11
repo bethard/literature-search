@@ -134,12 +134,14 @@ object LiteratureSearch {
           }
         }
       }
+      val citationCount = doc.get(IndexConfig.FieldNames.citationCount)
       // TODO: add corporate authors?
       val authorSpan = <span class="author">{ authors.mkString(", ") }</span>
       val titleSpan = <span class="title"><a href={ wokURLBase + wokID } target="_blank">{ title }</a></span>
       val sourceSpan = <span class="source">{ source }</span>
       val yearSpan = <span class="year">{ year }</span>
-      val parts = Seq(authorSpan, titleSpan, sourceSpan, yearSpan)
+      val citationCountSpan = <span class="citation-count">Cited by { citationCount }</span>
+      val parts = Seq(authorSpan, titleSpan, sourceSpan, yearSpan, citationCountSpan)
       <li>{ parts.map(_ ++ Text(". ")).flatten }</li>
     }
 
