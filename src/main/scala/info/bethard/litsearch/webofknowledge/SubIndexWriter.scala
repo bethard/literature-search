@@ -1,17 +1,23 @@
-package info.bethard.litsearch
+package info.bethard.litsearch.webofknowledge
 
 import java.io.File
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+
+import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.ParallelCompositeReader
+import org.apache.lucene.search.Collector
 import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.Scorer
 import org.apache.lucene.store.FSDirectory
+
 import com.lexicalscope.jewel.cli.CliFactory
 import com.lexicalscope.jewel.cli.{ Option => CliOption }
-import org.apache.lucene.search.Collector
-import org.apache.lucene.search.Scorer
-import org.apache.lucene.index.AtomicReaderContext
+
+import info.bethard.litsearch.IndexConfig
+import info.bethard.litsearch.TitleAbstractTextIndex
 
 object SubIndexWriter {
 
