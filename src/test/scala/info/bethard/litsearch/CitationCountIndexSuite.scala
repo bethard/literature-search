@@ -13,10 +13,10 @@ class CitationCountIndexSuite extends IndexSuiteBase {
     import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs }
     for {
       tempReader <- this.temporaryDirectoryReader(
-        Seq(articleIDWhenCited -> "0", citedArticleIDs -> ""),
-        Seq(articleIDWhenCited -> "1", citedArticleIDs -> "0"),
-        Seq(articleIDWhenCited -> "2", citedArticleIDs -> "1"),
-        Seq(articleIDWhenCited -> "3", citedArticleIDs -> "0 1 2"))
+        Seq(articleIDWhenCited --> "0", citedArticleIDs --> ""),
+        Seq(articleIDWhenCited --> "1", citedArticleIDs --> "0"),
+        Seq(articleIDWhenCited --> "2", citedArticleIDs --> "1"),
+        Seq(articleIDWhenCited --> "3", citedArticleIDs --> "0 1 2"))
       tempDir <- this.temporaryFSDirectory
     } {
 
@@ -40,10 +40,10 @@ class CitationCountIndexSuite extends IndexSuiteBase {
     import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs }
     for {
       tempReader <- this.temporaryDirectoryReader(
-        Seq(articleIDWhenCited -> "0", citedArticleIDs -> ""),
-        Seq(articleIDWhenCited -> "1", citedArticleIDs -> "0"),
-        Seq(articleIDWhenCited -> "2", citedArticleIDs -> "1"),
-        Seq(articleIDWhenCited -> "3", citedArticleIDs -> "1 2"))
+        Seq(articleIDWhenCited --> "0", citedArticleIDs --> ""),
+        Seq(articleIDWhenCited --> "1", citedArticleIDs --> "0"),
+        Seq(articleIDWhenCited --> "2", citedArticleIDs --> "1"),
+        Seq(articleIDWhenCited --> "3", citedArticleIDs --> "1 2"))
       tempDir <- this.temporaryFSDirectory
     } {
       // construct the index of citation counts

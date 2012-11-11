@@ -6,7 +6,7 @@ import org.apache.lucene.search.Query
 
 class TextIndex(defaultField: String) extends Index {
 
-  def createQuery(queryText: String): Query = IndexConfig.parseTermsQuery(defaultField, queryText)
+  def createQuery(queryText: String): Query = IndexConfig.parseTermsQuery(queryText, defaultField)
 }
 
 class AbstractTextIndex

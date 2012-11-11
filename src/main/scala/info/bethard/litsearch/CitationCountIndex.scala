@@ -40,7 +40,7 @@ object CitationCountIndex {
     // reporting increment - report progress 1000 times
     val incr = math.pow(10, math.floor(math.log10(maxDoc / 1000)))
     // function to parse an article ID into a query for citing articles
-    val getIDsQuery = IndexConfig.parseTermsQuery(IndexConfig.FieldNames.citedArticleIDs, _: String)
+    val getIDsQuery = IndexConfig.parseTermsQuery(_: String, IndexConfig.FieldNames.citedArticleIDs)
 
     // create index of citation count for each article
     val citationCountIndexWriter = IndexConfig.newIndexWriter(citationCountIndexDirectory)

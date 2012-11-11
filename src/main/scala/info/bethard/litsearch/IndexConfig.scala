@@ -9,7 +9,6 @@ import org.apache.lucene.analysis.core.KeywordAnalyzer
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer
 import org.apache.lucene.analysis.en.EnglishAnalyzer
 import org.apache.lucene.analysis.miscellaneous.PerFieldAnalyzerWrapper
-import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.index.IndexWriterConfig
@@ -45,22 +44,24 @@ object IndexConfig {
       FieldNames.articleIDWhenCited -> new KeywordAnalyzer,
       FieldNames.citedArticleIDs -> new WhitespaceAnalyzer(luceneVersion),
       FieldNames.citationCount -> new KeywordAnalyzer).asJava)
-
+  
   def newIndexWriter(directory: Directory): IndexWriter = {
     val config = new IndexWriterConfig(luceneVersion, this.analyzer)
     config.setOpenMode(IndexWriterConfig.OpenMode.CREATE)
     new IndexWriter(directory, config)
   }
 
-  def parseTermsQuery(fieldName: String, queryText: String): Query = {
+  def parseTermsQuery(queryText: String, fieldName: String): Query = {
     val tokenStream = this.analyzer.tokenStream(fieldName, new StringReader(queryText))
+    tokenStream.reset
     val termAttribute = tokenStream.getAttribute(classOf[CharTermAttribute]);
-    val incrementIter = Iterator.continually(tokenStream.incrementToken)
     val query = new BooleanQuery
     while (tokenStream.incrementToken) {
       val term = new Term(fieldName, termAttribute.toString)
       query.add(new TermQuery(term), BooleanClause.Occur.SHOULD)
     }
+    tokenStream.end
+    tokenStream.close
     query
   }
 }

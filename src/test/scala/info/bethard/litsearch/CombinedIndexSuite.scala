@@ -14,10 +14,10 @@ class CombinedIndexSuite extends IndexSuiteBase {
     import IndexConfig.FieldNames.{ articleIDWhenCited, citedArticleIDs, year }
     for {
       tempReader <- this.temporaryDirectoryReader(
-        Seq(articleIDWhenCited -> "0", year -> "1999", citedArticleIDs -> ""),
-        Seq(articleIDWhenCited -> "1", year -> "2000", citedArticleIDs -> "0"),
-        Seq(articleIDWhenCited -> "2", year -> "2005", citedArticleIDs -> "1"),
-        Seq( /* test missing ID */ year -> "2002", citedArticleIDs -> "1 2"))
+        Seq(articleIDWhenCited --> "0", year --> 1999, citedArticleIDs --> ""),
+        Seq(articleIDWhenCited --> "1", year --> 2000, citedArticleIDs --> "0"),
+        Seq(articleIDWhenCited --> "2", year --> 2005, citedArticleIDs --> "1"),
+        Seq( /* test missing ID */ year --> 2002, citedArticleIDs --> "1 2"))
       citationCountIndexDirectory <- this.temporaryFSDirectory
     } {
       // construct the index of citation counts

@@ -3,6 +3,7 @@ package info.bethard.litsearch
 import java.io.File
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field
+import org.apache.lucene.document.IntField
 import org.apache.lucene.document.TextField
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.store.Directory
@@ -37,7 +38,7 @@ abstract class IndexSuiteBase extends FunSuite {
     this.temporaryDirectory.map(FSDirectory.open)
   }
 
-  def temporaryDirectoryReader(docs: Seq[(String, String)]*): Traversable[DirectoryReader] = new Traversable[DirectoryReader] {
+  def temporaryDirectoryReader(docs: Seq[Field]*): Traversable[DirectoryReader] = new Traversable[DirectoryReader] {
     override def foreach[U](f: DirectoryReader => U): Unit = {
       for (indexDir <- temporaryDirectory) {
 
@@ -57,15 +58,21 @@ abstract class IndexSuiteBase extends FunSuite {
     }
   }
 
-  def writeDocuments(indexDir: Directory, docs: Seq[(String, String)]*) = {
+  def writeDocuments(indexDir: Directory, docs: Seq[Field]*) = {
     val writer = IndexConfig.newIndexWriter(indexDir)
     for (doc <- docs) {
       val document = new Document
-      for ((key, value) <- doc) {
-        document.add(new TextField(key, value, Field.Store.YES))
+      for (field <- doc) {
+        document.add(field)
       }
       writer.addDocument(document)
     }
     writer.close
   }
+  
+  class StringWithFieldMethods(key: String) {
+    def -->(value: Int) = new IntField(key, value, Field.Store.YES)
+    def -->(value: String) = new TextField(key, value, Field.Store.YES)
+  }
+  implicit def addFieldMethods(key: String) = new StringWithFieldMethods(key)
 }

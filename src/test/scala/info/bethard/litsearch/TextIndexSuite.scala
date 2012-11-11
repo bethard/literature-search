@@ -15,10 +15,10 @@ class TextIndexSuite extends IndexSuiteBase {
       // create the index of abstract texts
       val index = new AbstractTextIndex
       this.writeDocuments(tempDir,
-        Seq(text -> "aaa bbb ccc"),
-        Seq(text -> "ccc;ddd;eee"),
-        Seq(text -> "eee-fff-ggg"),
-        Seq(text -> "ggghhhiii"))
+        Seq(text --> "aaa bbb ccc"),
+        Seq(text --> "ccc;ddd;eee"),
+        Seq(text --> "eee-fff-ggg"),
+        Seq(text --> "ggghhhiii"))
 
       // check some queries
       val reader = DirectoryReader.open(tempDir)
@@ -38,10 +38,10 @@ class TextIndexSuite extends IndexSuiteBase {
       // create the index of abstract texts
       val index = new TitleTextIndex
       this.writeDocuments(tempDir,
-        Seq(text -> "aaa bbb ccc"),
-        Seq(text -> "ccc;ddd;eee"),
-        Seq(text -> "eee-fff-ggg"),
-        Seq(text -> "ggghhhiii"))
+        Seq(text --> "aaa bbb ccc"),
+        Seq(text --> "ccc;ddd;eee"),
+        Seq(text --> "eee-fff-ggg"),
+        Seq(text --> "ggghhhiii"))
 
       // check some queries
       val reader = DirectoryReader.open(tempDir)
@@ -61,10 +61,10 @@ class TextIndexSuite extends IndexSuiteBase {
       // create the index of abstract texts
       val index = new TitleAbstractTextIndex
       this.writeDocuments(tempDir,
-        Seq(titleText -> "aaa bbb", abstractText -> "ccc"),
-        Seq(abstractText -> "ccc;ddd;eee"),
-        Seq(titleText -> "eee-fff-ggg"),
-        Seq(titleText -> "ggghhhiii", abstractText -> "ggghhhiii"))
+        Seq(titleText --> "aaa bbb", abstractText --> "ccc"),
+        Seq(abstractText --> "ccc;ddd;eee"),
+        Seq(titleText --> "eee-fff-ggg"),
+        Seq(titleText --> "ggghhhiii", abstractText --> "ggghhhiii"))
 
       // check some queries
       val reader = DirectoryReader.open(tempDir)
