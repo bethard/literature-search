@@ -5,6 +5,8 @@ import java.io.File
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
+import org.apache.lucene.document.Field
+import org.apache.lucene.document.IntField
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.ParallelCompositeReader
@@ -17,6 +19,7 @@ import com.lexicalscope.jewel.cli.CliFactory
 import com.lexicalscope.jewel.cli.{ Option => CliOption }
 
 import info.bethard.litsearch.IndexConfig
+import info.bethard.litsearch.IndexConfig.FieldNames
 import info.bethard.litsearch.TitleAbstractTextIndex
 
 object SubIndexWriter {
@@ -74,8 +77,16 @@ object SubIndexWriter {
           var time = System.nanoTime
           
           // write each selected document from the reader to the writer
-          for (docID <- docIDs) {
-            writer.addDocument(reader.document(docID))
+          for (docID <- docIDs.take(100)) {
+            // FIXME: this workaround is necessary or the the year tokens don't get indexed
+            val fields = for (field <- reader.document(docID).asScala) yield {
+              if (field.name() == FieldNames.year) {
+                new IntField(FieldNames.year, field.numericValue.intValue, Field.Store.YES)
+              } else {
+                field
+              }
+            }
+            writer.addDocument(fields.asJava)
 
             // report progress
             i += 1
