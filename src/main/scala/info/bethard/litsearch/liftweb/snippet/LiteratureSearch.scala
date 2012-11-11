@@ -54,15 +54,17 @@ object LiteratureSearch {
   val citationCountIndex = new CitationCountIndex(logThenScale)
   val ageIndex = new AgeIndex(2012, logThenScale)
 
-  val articlesReader = open("index.articles")
-  val citationCountReader = open("index.citation_count")
-  val reader = new ParallelCompositeReader(articlesReader, citationCountReader)
-  val searcher = new IndexSearcher(reader)
-
-  private def open(name: String): DirectoryReader = {
-    val path = Props.get(name).failMsg("\"%s\" property missing".format(name)).open_!
-    DirectoryReader.open(FSDirectory.open(new File(path)))
+  // open readers to all the indexes
+  val reader = {
+    val pathsString = Props.get("indexes").failMsg("\"indexes\" property missing").open_!
+    val indexReaders = for (indexPath <- pathsString.split(",")) yield {
+      DirectoryReader.open(FSDirectory.open(new File(indexPath)))
+    }
+    new ParallelCompositeReader(indexReaders: _*)  
   }
+  
+  // opent the searcher
+  val searcher = new IndexSearcher(reader)
 
   def render = {
 
@@ -91,10 +93,6 @@ object LiteratureSearch {
           this.textIndex -> textWeight,
           this.citationCountIndex -> citationCountWeight,
           this.ageIndex -> ageWeight)
-
-        // open the index for searching
-        val articlesReader = open("index.articles")
-        val citationCountReader = open("index.citation_count")
 
         // search for the given query
         val topDocs = this.searcher.search(index.createQuery(query), nHits.is)

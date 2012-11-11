@@ -1,2 +1,2 @@
-index.articles = /Users/bethard/Code/literature-search/index/isi-articles
-index.citation_count = /Users/bethard/Code/literature-search/index/isi-articles-citation-count
+indexes = /Users/bethard/Code/literature-search/index/preterm/web-of-knowledge,\
+          /Users/bethard/Code/literature-search/index/preterm/web-of-knowledge-citation-count

@@ -1,3 +1,2 @@
-index.articles = /export/home/sbethard/stanford/articles
-index.citation_count = /export/home/sbethard/stanford/citation-count
-index.age = /export/home/sbethard/stanford/age-2012
+indexes = /export/home/sbethard/literature-search/index/web-of-knowledge,\
+          /export/home/sbethard/literature-search/index/web-of-knowledge-citation-count
