@@ -29,21 +29,24 @@ import net.liftweb.util.Helpers.tryo
 import net.liftweb.util.Props
 
 object LiteratureSearch {
-
-  private object query extends SessionVar("") {
-    override def set(value: String) = {
+  
+  private class SearchResettingSessionVar[T](value: T) extends SessionVar(value){
+    override def set(value: T) = {
       if (value != this.is) {
         nHits.set(10)
+        results.set(Empty)
       }
       super.set(value)
     }
   }
+
+  private object query extends SearchResettingSessionVar("")
   private object results extends SessionVar[Box[TopDocs]](Empty)
 
   private object nHits extends SessionVar(10)
-  private object textWeight extends SessionVar("1.0")
-  private object citationCountWeight extends SessionVar("0.1")
-  private object ageWeight extends SessionVar("-0.2")
+  private object textWeight extends SearchResettingSessionVar("1.0")
+  private object citationCountWeight extends SearchResettingSessionVar("0.1")
+  private object ageWeight extends SearchResettingSessionVar("-0.2")
 
   val wokURLBase = "http://apps.webofknowledge.com/InboundService.do?product=WOS&action=retrieve&mode=FullRecord&UT="
 

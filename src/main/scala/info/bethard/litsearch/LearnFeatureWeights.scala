@@ -16,8 +16,8 @@ import org.apache.lucene.search.BooleanClause
 import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Collector
 import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.NumericRangeQuery
 import org.apache.lucene.search.Scorer
-import org.apache.lucene.search.TermRangeQuery
 import org.apache.lucene.search.similarities.DefaultSimilarity
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
@@ -148,7 +148,7 @@ object LearnFeatureWeights {
         doc <- docs
         queryDocument = reader.document(doc)
         // only use articles with an abstract and a bibliography
-        citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs))
+        citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs)).iterator
         abstractText = Option(queryDocument.get(FieldNames.abstractText)).getOrElse("")
         titleText = Option(queryDocument.get(FieldNames.titleText)).getOrElse("")
         text = abstractText + titleText
@@ -156,18 +156,14 @@ object LearnFeatureWeights {
       } yield {
         val year = queryDocument.get(FieldNames.year).toInt
 
-        // prepare to write SVM-MAP files
-        val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
-        val trainingDataWriter = new PrintWriter(trainingDataFile)
-
         // determine what articles were cited
         val citedIds = citedIdsString.split("\\s+").toSet
 
         // create the query based from the title and abstract text,
         // and only considering articles published before the query article
         val query = new BooleanQuery()
-        val publishedBefore = TermRangeQuery.newStringRange(
-          FieldNames.year, (year - 100).toString, year.toString, true, false)
+        val publishedBefore = NumericRangeQuery.newIntRange(
+            FieldNames.year, null, year, true, false)
         query.add(publishedBefore, BooleanClause.Occur.MUST)
         query.add(index.createQuery(text), BooleanClause.Occur.MUST)
         println(query)
@@ -175,23 +171,31 @@ object LearnFeatureWeights {
         // retrieve other articles based on the main query
         val collector = new DocScoresCollector(nHits)
         searcher.search(query, collector)
-        val labels = for (docScores <- collector.getDocSubScores) yield {
+        val docSubScores = collector.popDocSubScores
+        val results = for (docScores <- docSubScores) yield {
           val resultDocument = reader.document(docScores.doc)
           val id = resultDocument.get(FieldNames.articleIDWhenCited)
 
           // generate SVM-style label and feature string
           val label = if (citedIds.contains(id)) "+1" else "-1"
-          val featuresString = featureFormat.format(docScores.subScores: _*)
-          trainingDataWriter.println(lineFormat.format(label, doc, featuresString))
-          label
+          (label, doc, docScores.subScores)
         }
-
-        // close the writer
-        trainingDataWriter.close
+        val labels = results.map(_._1)
 
         // only add the file if both positive and negative examples were found
         if (labels.toSet.size == 2) {
           nWritten += 1
+          
+          // write the file for this document
+          val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
+          val trainingDataWriter = new PrintWriter(trainingDataFile)
+          for ((label, doc, subScores) <- results) {
+            val featuresString = featureFormat.format(subScores: _*)
+            trainingDataWriter.println(lineFormat.format(label, doc, featuresString))
+          }
+          trainingDataWriter.close
+          
+          // add the file path to the list of data files
           val trainingDataIndexWriter = new FileWriter(trainingDataIndexFile, true)
           trainingDataIndexWriter.write(trainingDataFile.getAbsolutePath)
           trainingDataIndexWriter.write('\n')
@@ -268,7 +272,7 @@ class DocScoresCollector(maxSize: Int) extends Collector {
 
   override def setNextReader(context: AtomicReaderContext): Unit = {}
 
-  def getDocSubScores: Seq[DocScores] = {
+  def popDocSubScores: Seq[DocScores] = {
     val buffer = Buffer.empty[DocScores]
     while (this.priorityQueue.size > 0) {
       buffer += this.priorityQueue.pop
