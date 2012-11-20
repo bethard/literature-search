@@ -12,12 +12,14 @@ import scala.sys.process.Process
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.ParallelCompositeReader
+import org.apache.lucene.index.Term
 import org.apache.lucene.search.BooleanClause
 import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.Collector
 import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.NumericRangeQuery
 import org.apache.lucene.search.Scorer
+import org.apache.lucene.search.TermQuery
 import org.apache.lucene.search.similarities.DefaultSimilarity
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
@@ -37,29 +39,57 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("indexes"))
     def getIndexFiles: java.util.List[File]
 
-    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
-    def getNHits: Int
-
-    @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
-    def getNIterations: Int
-
-    @CliOption(longName = Array("max-articles"), defaultValue = Array("100"))
-    def getMaxArticles: Int
-
-    @CliOption(longName = Array("min-article-references"), defaultValue = Array("20"))
-    def getMinArticleReferences: Int
-
-    @CliOption(longName = Array("min-article-citation-count"), defaultValue = Array("100"))
-    def getMinArticleCitationCount: Int
-
     @CliOption(longName = Array("svm-map-dir"))
     def getSvmMapDir: File
 
     @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1000"))
     def getSvmMapCost: Int
 
-    @CliOption(longName = Array("query"), defaultValue = Array("premature"))
-    def getQuery: String
+    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
+    def getNHits: Int
+
+    @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
+    def getNIterations: Int
+
+    @CliOption(longName = Array("accession-numbers"), defaultValue = Array(
+        // Adverse birth outcomes in African American women: the social context of persistent reproductive disadvantage
+        "000296271400002", 
+        // Psychological science on pregnancy: stress processes, biopsychosocial models, and emerging research issues
+        "000287331200020", 
+        // Intention to become pregnant and low birth weight and preterm birth: a systematic review
+        "000286603900008", 
+        // Linkages among reproductive health, maternal health, and perinatal outcomes
+        "000285527800008", 
+        // Baby on board: do responses to stress in the maternal brain mediate adverse pregnancy outcome?
+        "000280535500009", 
+        // Not available: Global report on preterm birth and stillbirth (2 of 7): discovery science.
+        // Disasters and perinatal health:a systematic review
+        "000288002900013",
+        // Support during pregnancy for women at increased risk of low birthweight babies
+        "000278858300045", 
+        //Maternal exposure to domestic violence and pregnancy and birth outcomes: a systematic review and meta-analyses
+        "000283855500011",
+        //The role of stress in female reproduction and pregnancy: an update
+        "000283095800011",
+        //Hurricane Katrina and perinatal health
+        "000271972900008",
+        //What causes racial disparities in very preterm birth? A biosocial perspective
+        "000271814500006",
+        //The interaction between chronic stress and pregnancy: preterm birth from a biobehavioral perspective
+        "000262293200003",
+        //Race, racism, and racial disparities in adverse birth outcomes
+        "000256184000017",
+        //Psychosocial stress and pregnancy outcome
+        "000256184000015",
+        //Spontaneous preterm birth, a clinical dilemma: etiologic, pathophysiologic and genetic heterogeneities and racial disparity
+        "000257910700002",
+        //Depression and anxiety during pregnancy: a risk factor for obstetric, fetal and neonatal outcome? A critical review of the literature
+        "000245588000001",
+        //The interrelationship of maternal stress, endocrine factors and inflammation on gestational length
+        "000183691600004"
+        // Not available in WoS: Lowering the premature birth rate: what the U.S. experience means for Japan
+        ))
+    def getArticleAccessionNumbers: java.util.List[String]
   }
 
   def main(args: Array[String]): Unit = {
@@ -88,21 +118,25 @@ object LearnFeatureWeights {
     val reader = new ParallelCompositeReader(subReaders: _*)
     val searcher = new IndexSearcher(reader)
 
-    // determine the documents for training
-    val queryString = options.getQuery
-    val topDocs = searcher.search(textIndex.createQuery(queryString), reader.maxDoc)
-    val docs = topDocs.scoreDocs.iterator.map(_.doc).filter { docID =>
-      val document = reader.document(docID)
-      Option(document.get(FieldNames.citedArticleIDs)) match {
-        case None => false
-        case Some(citedIDsString) => {
-          val hasReferences = citedIDsString.split("\\s+").toSet.size >= options.getMinArticleReferences
-          val hasCitations = document.get(FieldNames.citationCount).toInt >= options.getMinArticleCitationCount
-          hasReferences && hasCitations
-        }
+    // function for finding articles based on accession number (WoK article ID)
+    val getDocID: String => Option[Int] = articleID => {
+      val query = new TermQuery(new Term(IndexConfig.FieldNames.articleID))
+      val topDocs = searcher.search(query, 2)
+      if (topDocs.scoreDocs.length < 1) {
+        System.err.println("WARNING: no article for id " + articleID)
+        None
+      } else if (topDocs.scoreDocs.length > 1) {
+        System.err.println("WARNING: more than one article for id " + articleID)
+        None
+      } else {
+        Some(topDocs.scoreDocs(0).doc)
       }
-    }.take(options.getMaxArticles).toSeq
-    this.logger.info("Found %d documents containing \"%s\"".format(docs.size, queryString))
+    }
+    
+    // determine the documents for training
+    val articleIDs = options.getArticleAccessionNumbers.asScala
+    val docs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
+    this.logger.info("Found %d documents".format(docs.size))
 
     // remove any existing training data files
     for (iteration <- 1 to options.getNIterations) {
