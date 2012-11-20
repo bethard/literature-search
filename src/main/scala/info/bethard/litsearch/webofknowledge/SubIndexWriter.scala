@@ -31,7 +31,8 @@ object SubIndexWriter {
     @CliOption(longName = Array("output-dir"))
     def getOutputDirectory: File
 
-    @CliOption(longName = Array("query"), defaultValue = Array("preterm premature prematurity"))
+    @CliOption(longName = Array("query"), defaultValue = Array(
+        "preterm premature prematurity perinatal birth pregnancy pregnant"))
     def getQuery: String
   }
 
