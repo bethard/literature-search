@@ -92,13 +92,10 @@ object LearnFeatureWeights {
     val nHits = options.getNHits
     val articleIDs = options.getArticleAccessionNumbers.asScala
 
-    // scale non-text queries to [0, 50] since text queries are something like [0, 500]
-    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 50f)
-
     // create indexes from command line parameters
     val textIndex = new TitleAbstractTextIndex
-    val citationCountIndex = new CitationCountIndex(logThenScale)
-    val ageIndex = new AgeIndex(2012, logThenScale)
+    val citationCountIndex = new CitationCountIndex(identity)
+    val ageIndex = new AgeIndex(2012, identity)
     val indexes = List[Index](textIndex, citationCountIndex, ageIndex)
     
     // open the reader and searcher
