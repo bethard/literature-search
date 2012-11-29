@@ -1,13 +1,10 @@
 package info.bethard.litsearch
 
 import java.io.File
-import java.io.FileWriter
-import java.io.PrintWriter
 import java.util.logging.Logger
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import scala.sys.process.Process
 
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
@@ -24,26 +21,23 @@ import org.apache.lucene.search.similarities.DefaultSimilarity
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.util.PriorityQueue
 
-import com.google.common.io.Files
 import com.lexicalscope.jewel.cli.CliFactory
 import com.lexicalscope.jewel.cli.{ Option => CliOption }
+
+import de.bwaldvogel.liblinear.Feature
+import de.bwaldvogel.liblinear.FeatureNode
+import de.bwaldvogel.liblinear.Linear
+import de.bwaldvogel.liblinear.Parameter
+import de.bwaldvogel.liblinear.Problem
+import de.bwaldvogel.liblinear.SolverType
 
 import info.bethard.litsearch.IndexConfig.FieldNames
 
 object LearnFeatureWeights {
 
   trait Options {
-    @CliOption(longName = Array("model-dir"), defaultValue = Array("target/model"))
-    def getModelDir: File
-
     @CliOption(longName = Array("indexes"))
     def getIndexFiles: java.util.List[File]
-
-    @CliOption(longName = Array("svm-map-dir"))
-    def getSvmMapDir: File
-
-    @CliOption(longName = Array("svm-map-cost"), defaultValue = Array("1000"))
-    def getSvmMapCost: Int
 
     @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
     def getNHits: Int
@@ -95,14 +89,6 @@ object LearnFeatureWeights {
   def main(args: Array[String]): Unit = {
     val options = CliFactory.parseArguments(classOf[Options], args: _*)
     val nHits = options.getNHits
-    val modelDir = options.getModelDir
-
-    // determine names for files in the model directory
-    if (!modelDir.exists) {
-      modelDir.mkdirs
-    }
-    val getTrainingDataIndexFile = (iteration: Int) =>
-      new File(options.getModelDir, "training-data-%d.svmmap-index".format(iteration))
 
     // scale to [0, 500] since that's about the range that the text queries return
     val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 500f)
@@ -138,21 +124,19 @@ object LearnFeatureWeights {
     val docs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
     this.logger.info("Found %d documents".format(docs.size))
 
-    // remove any existing training data files
-    for (iteration <- 1 to options.getNIterations) {
-      val trainingDataIndexFile = getTrainingDataIndexFile(iteration)
-      if (trainingDataIndexFile.exists()) {
-        trainingDataIndexFile.delete()
-      }
-    }
-
     // initialize index weights
     val indexes = Seq(textIndex, citationCountIndex, ageIndex)
     var weights = Seq(1f, 0f, 0f)
 
-    // prepare for writing output
-    val featureFormat = (0 until weights.size).map(_ + ":%f").mkString(" ")
-    val lineFormat = "%s qid:%d %s"
+    // collections of all training instances so far
+    val instanceFeatures = Buffer.empty[Array[Feature]]
+    val instanceLabels = Buffer.empty[Double]
+    
+    // insert fake first instance to make label-index assignment predictable
+    instanceFeatures += Array.empty
+    instanceLabels += 0.0
+    
+    // repeatedly train model
     for (iteration <- 1 to options.getNIterations) {
       this.logger.info("Current weights: " + weights)
 
@@ -164,20 +148,7 @@ object LearnFeatureWeights {
         override def queryNorm(sumOfSquaredWeights: Float) = 1f
       })
 
-      // prepare directory for svm files
-      val trainingDataDir = new File(options.getModelDir, "training-data-" + iteration)
-      if (!trainingDataDir.exists) {
-        trainingDataDir.mkdir
-      }
-
-      // prepare index of svm files (starting with index from previous iteration)
-      val trainingDataIndexFile = getTrainingDataIndexFile(iteration)
-      if (iteration > 1) {
-        Files.copy(getTrainingDataIndexFile(iteration - 1), trainingDataIndexFile)
-      }
-
       // generate one training example for each document in the index
-      var nWritten = 0
       val averagePrecisions = for {
         doc <- docs
         queryDocument = reader.document(doc)
@@ -206,39 +177,23 @@ object LearnFeatureWeights {
         val collector = new DocScoresCollector(nHits)
         searcher.search(query, collector)
         val docSubScores = collector.popDocSubScores
-        val results = for (docScores <- docSubScores) yield {
+        val labels = for (docScores <- docSubScores) yield {
           val resultDocument = reader.document(docScores.doc)
           val id = resultDocument.get(FieldNames.articleIDWhenCited)
 
-          // generate SVM-style label and feature string
-          val label = if (citedIds.contains(id)) "+1" else "-1"
-          (label, doc, docScores.subScores)
-        }
-        val labels = results.map(_._1)
-
-        // only add the file if both positive and negative examples were found
-        if (labels.toSet.size == 2) {
-          nWritten += 1
-          
-          // write the file for this document
-          val trainingDataFile = new File(trainingDataDir, doc + ".svmmap")
-          val trainingDataWriter = new PrintWriter(trainingDataFile)
-          for ((label, doc, subScores) <- results) {
-            val featuresString = featureFormat.format(subScores: _*)
-            trainingDataWriter.println(lineFormat.format(label, doc, featuresString))
-          }
-          trainingDataWriter.close
-          
-          // add the file path to the list of data files
-          val trainingDataIndexWriter = new FileWriter(trainingDataIndexFile, true)
-          trainingDataIndexWriter.write(trainingDataFile.getAbsolutePath)
-          trainingDataIndexWriter.write('\n')
-          trainingDataIndexWriter.close
+          // add label and features to training data
+          val label = citedIds.contains(id)
+          val features =
+            for ((score, i) <- docScores.subScores.zipWithIndex)
+              yield new FeatureNode(i + 1, score)
+          instanceFeatures += features.toArray
+          instanceLabels += (if (label) 1.0 else 0.0)
+          label
         }
 
         // calculate and yield the average precision
         val relevantRanks =
-          for ((label, rank) <- labels.zipWithIndex; if label == "+1") yield rank
+          for ((label, rank) <- labels.zipWithIndex; if label) yield rank
         val precisions =
           for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
         precisions.sum / citedIds.size
@@ -246,25 +201,22 @@ object LearnFeatureWeights {
 
       // log the mean average precision
       this.logger.info("MAP: %.4f".format(averagePrecisions.sum / averagePrecisions.size))
-      if (nWritten == 0) {
-        throw new Exception("No new training examples found")
-      }
-      this.logger.info("Added %d training examples".format(nWritten))
 
       // train the model
-      val modelFile = new File(options.getModelDir, "model-%d.svmmap".format(iteration))
-      val svmMapPath = new File(options.getSvmMapDir, "svm_map_learn").getPath
-      val cost = options.getSvmMapCost.toString
-      val svmMapCommand = Seq(svmMapPath, "-c", cost, trainingDataIndexFile.getPath, modelFile.getPath)
-      val svmMap = Process(svmMapCommand, None, "PYTHONPATH" -> options.getSvmMapDir.getPath)
-      svmMap.!
-
-      val printWeightsCommand = """import pickle; """ +
-        """SVMBlank = type("SVMBlank", (), {}); """ +
-        """model = pickle.load(open("%s")); """.format(modelFile) +
-        """print " ".join(map(str, model.w))"""
-      val output = Process(Seq("python", "-c", printWeightsCommand)).lines.mkString
-      weights = output.split("\\s+").map(_.toFloat).toSeq
+      val problem = new Problem
+      problem.x = instanceFeatures.toArray
+      problem.y = instanceLabels.toArray
+      problem.l = problem.x.length
+      problem.n = weights.length
+      val solver = SolverType.L2R_L2LOSS_SVC
+      val C = 1000.0
+      val eps = 0.001
+      val parameters = new Parameter(solver, C, eps)
+      // we care 1000 times as much about positive examples as negative ones
+      parameters.setWeights(Array(1000.0), Array(1))
+      val model = Linear.train(problem, parameters)
+      // positive model weights predict 0 class (and we want the reverse for our weights)
+      weights = model.getFeatureWeights.map(-_.toFloat)
       val maxWeight = weights.map(math.abs).max
       weights = weights.map(_ / maxWeight)
     }
