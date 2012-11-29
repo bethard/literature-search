@@ -39,7 +39,7 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("indexes"))
     def getIndexFiles: java.util.List[File]
 
-    @CliOption(longName = Array("n-hits"), defaultValue = Array("100"))
+    @CliOption(longName = Array("n-hits"), defaultValue = Array("1000"))
     def getNHits: Int
 
     @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
@@ -90,8 +90,8 @@ object LearnFeatureWeights {
     val options = CliFactory.parseArguments(classOf[Options], args: _*)
     val nHits = options.getNHits
 
-    // scale to [0, 500] since that's about the range that the text queries return
-    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 500f)
+    // scale non-text queries to [0, 50] since text queries are something like [0, 500]
+    val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 50f)
 
     // create indexes from command line parameters
     val textIndex = new TitleAbstractTextIndex
@@ -209,7 +209,7 @@ object LearnFeatureWeights {
       problem.l = problem.x.length
       problem.n = weights.length
       val solver = SolverType.L2R_L2LOSS_SVC
-      val C = 1000.0
+      val C = 10000.0
       val eps = 0.001
       val parameters = new Parameter(solver, C, eps)
       // we care 1000 times as much about positive examples as negative ones
