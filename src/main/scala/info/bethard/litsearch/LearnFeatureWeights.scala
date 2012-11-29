@@ -42,7 +42,7 @@ object LearnFeatureWeights {
     @CliOption(longName = Array("n-hits"), defaultValue = Array("1000"))
     def getNHits: Int
 
-    @CliOption(longName = Array("n-iterations"), defaultValue = Array("10"))
+    @CliOption(longName = Array("n-iterations"), defaultValue = Array("5"))
     def getNIterations: Int
 
     @CliOption(longName = Array("accession-numbers"), defaultValue = Array(
