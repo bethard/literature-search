@@ -8,6 +8,7 @@ import scala.collection.mutable.Buffer
 
 import org.apache.lucene.index.AtomicReaderContext
 import org.apache.lucene.index.DirectoryReader
+import org.apache.lucene.index.IndexReader
 import org.apache.lucene.index.ParallelCompositeReader
 import org.apache.lucene.index.Term
 import org.apache.lucene.search.BooleanClause
@@ -89,6 +90,7 @@ object LearnFeatureWeights {
   def main(args: Array[String]): Unit = {
     val options = CliFactory.parseArguments(classOf[Options], args: _*)
     val nHits = options.getNHits
+    val articleIDs = options.getArticleAccessionNumbers.asScala
 
     // scale non-text queries to [0, 50] since text queries are something like [0, 500]
     val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 50f)
@@ -97,11 +99,33 @@ object LearnFeatureWeights {
     val textIndex = new TitleAbstractTextIndex
     val citationCountIndex = new CitationCountIndex(logThenScale)
     val ageIndex = new AgeIndex(2012, logThenScale)
-
+    val indexes = List[Index](textIndex, citationCountIndex, ageIndex)
+    
     // open the reader and searcher
     val indexFiles = options.getIndexFiles.asScala
     val subReaders = for (f <- indexFiles) yield DirectoryReader.open(FSDirectory.open(f))
     val reader = new ParallelCompositeReader(subReaders: _*)
+
+    val weights = this.learnWeights(
+        indexes,
+        List(1.0f, 0.0f, 0.0f),
+        reader,
+        articleIDs,
+        options.getNHits,
+        options.getNIterations)
+
+    this.logger.info("Final weights: " + weights.toList)
+
+    reader.close
+  }
+  
+  def learnWeights(
+      indexes: Seq[Index],
+      initialWeights: Seq[Float],
+      reader: IndexReader,
+      articleIDs: Seq[String],
+      nHits: Int,
+      nIterations: Int): Seq[Float] = {
     val searcher = new IndexSearcher(reader)
 
     // function for finding articles based on accession number (WoK article ID)
@@ -109,10 +133,10 @@ object LearnFeatureWeights {
       val query = new TermQuery(new Term(IndexConfig.FieldNames.articleID, articleID))
       val topDocs = searcher.search(query, 2)
       if (topDocs.scoreDocs.length < 1) {
-        System.err.println("WARNING: no article for id " + articleID)
+        this.logger.warning("no article for id " + articleID)
         None
       } else if (topDocs.scoreDocs.length > 1) {
-        System.err.println("WARNING: more than one article for id " + articleID)
+        this.logger.warning("WARNING: more than one article for id " + articleID)
         None
       } else {
         Some(topDocs.scoreDocs(0).doc)
@@ -120,13 +144,11 @@ object LearnFeatureWeights {
     }
     
     // determine the documents for training
-    val articleIDs = options.getArticleAccessionNumbers.asScala
     val docs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
     this.logger.info("Found %d documents".format(docs.size))
 
     // initialize index weights
-    val indexes = Seq(textIndex, citationCountIndex, ageIndex)
-    var weights = Seq(1f, 0f, 0f)
+    var weights = initialWeights
 
     // collections of all training instances so far
     val instanceFeatures = Buffer.empty[Array[Feature]]
@@ -137,7 +159,7 @@ object LearnFeatureWeights {
     instanceLabels += 0.0
     
     // repeatedly train model
-    for (iteration <- 1 to options.getNIterations) {
+    for (iteration <- 1 to nIterations) {
       this.logger.info("Current weights: " + weights)
 
       // create main index as weighted sum of other indexes 
@@ -171,7 +193,6 @@ object LearnFeatureWeights {
             FieldNames.year, null, year, true, false)
         query.add(publishedBefore, BooleanClause.Occur.MUST)
         query.add(index.createQuery(text), BooleanClause.Occur.MUST)
-        println(query)
 
         // retrieve other articles based on the main query
         val collector = new DocScoresCollector(nHits)
@@ -220,10 +241,9 @@ object LearnFeatureWeights {
       val maxWeight = weights.map(math.abs).max
       weights = weights.map(_ / maxWeight)
     }
-    this.logger.info("Final weights: " + weights)
-
-    // close the reader
-    reader.close
+    
+    // return the final weights
+    weights
   }
 
   val logger = Logger.getLogger(this.getClass.getName)
