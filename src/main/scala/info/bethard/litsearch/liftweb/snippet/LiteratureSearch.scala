@@ -30,6 +30,17 @@ import net.liftweb.util.Props
 
 object LiteratureSearch {
   
+  private val citationCountScalingFactor = 50.0f
+  private val ageScalingFactor = 2.0f
+  
+  private val learnedTextWeight = 1.0f
+  private val learnedCitationCountWeight = 0.0044f * citationCountScalingFactor
+  private val learnedAgeWeight = -0.09 * ageScalingFactor
+  
+  private val learnedTextWeightString = "%.2f".format(learnedTextWeight)
+  private val learnedCitationCountWeightString = "%.2f".format(learnedCitationCountWeight)
+  private val learnedAgeWeightString = "%.2f".format(learnedAgeWeight)
+  
   private class SearchResettingSessionVar[T](value: T) extends SessionVar(value){
     override def set(value: T) = {
       if (value != this.is) {
@@ -44,18 +55,15 @@ object LiteratureSearch {
   private object results extends SessionVar[Box[TopDocs]](Empty)
 
   private object nHits extends SessionVar(10)
-  private object textWeight extends SearchResettingSessionVar("1.0")
-  private object citationCountWeight extends SearchResettingSessionVar("0.1")
-  private object ageWeight extends SearchResettingSessionVar("-0.2")
+  private object textWeight extends SearchResettingSessionVar(learnedTextWeightString)
+  private object citationCountWeight extends SearchResettingSessionVar(learnedCitationCountWeightString)
+  private object ageWeight extends SearchResettingSessionVar(learnedAgeWeightString)
 
   val wokURLBase = "http://apps.webofknowledge.com/InboundService.do?product=WOS&action=retrieve&mode=FullRecord&UT="
 
-  // scale to match training
-  val logThenScale = QueryFunctions.logOf1Plus andThen QueryFunctions.scaleBetween(0f, 500f)
-
   val textIndex = new TitleAbstractTextIndex
-  val citationCountIndex = new CitationCountIndex(logThenScale)
-  val ageIndex = new AgeIndex(2012, logThenScale)
+  val citationCountIndex = new CitationCountIndex(identity)
+  val ageIndex = new AgeIndex(2012, identity)
 
   // open readers to all the indexes
   val reader = {
@@ -94,8 +102,8 @@ object LiteratureSearch {
         // create the index with the given weights
         val index = new CombinedIndex(
           this.textIndex -> textWeight,
-          this.citationCountIndex -> citationCountWeight,
-          this.ageIndex -> ageWeight)
+          this.citationCountIndex -> citationCountWeight / this.citationCountScalingFactor,
+          this.ageIndex -> ageWeight / this.ageScalingFactor)
 
         // search for the given query
         val topDocs = this.searcher.search(index.createQuery(query), nHits.is)
