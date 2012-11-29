@@ -120,7 +120,7 @@ object LearnFeatureWeights {
 
     // function for finding articles based on accession number (WoK article ID)
     val getDocID: String => Option[Int] = articleID => {
-      val query = new TermQuery(new Term(IndexConfig.FieldNames.articleID))
+      val query = new TermQuery(new Term(IndexConfig.FieldNames.articleID, articleID))
       val topDocs = searcher.search(query, 2)
       if (topDocs.scoreDocs.length < 1) {
         System.err.println("WARNING: no article for id " + articleID)
