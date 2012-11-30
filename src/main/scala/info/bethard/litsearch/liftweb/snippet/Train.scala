@@ -8,7 +8,7 @@ import org.apache.lucene.search.TopDocs
 
 import info.bethard.litsearch.AgeIndex
 import info.bethard.litsearch.CitationCountIndex
-import info.bethard.litsearch.LearnFeatureWeights
+import info.bethard.litsearch.LearnFeatureWeightsIterator
 import info.bethard.litsearch.TitleAbstractTextIndex
 import net.liftweb.http.SHtml
 import net.liftweb.http.SessionVar
@@ -115,14 +115,15 @@ object Train {
     val ageIndex = new AgeIndex(2012, identity)
     val nHits = 1000
     val nIterations = 5
-    val weights = LearnFeatureWeights.learnWeights(
+    val scoredWeightsIter = new LearnFeatureWeightsIterator(
       this.indexes,
       List(1.0f, 0.0f, 0.0f),
       Search.reader,
       Search.searcher,
       this.trainingDocs.is.toSeq,
-      nHits, nIterations)
+      nHits)
+    val printingIter = scoredWeightsIter.map(w => {println(w); w}) 
+    val weights = printingIter.take(nIterations).drop(2).maxBy(_._2)._1
     this.weights.set(Some(weights))
-    println(this.weights.is)
   }
 }

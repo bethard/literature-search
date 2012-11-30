@@ -36,6 +36,8 @@ import info.bethard.litsearch.IndexConfig.FieldNames
 
 object LearnFeatureWeights {
 
+  val logger = Logger.getLogger(this.getClass.getName)
+
   trait Options {
     @CliOption(longName = Array("indexes"))
     def getIndexFiles: java.util.List[File]
@@ -48,20 +50,20 @@ object LearnFeatureWeights {
 
     @CliOption(longName = Array("accession-numbers"), defaultValue = Array(
         // Adverse birth outcomes in African American women: the social context of persistent reproductive disadvantage
-        "000296271400002", 
+        "000296271400002",
         // Psychological science on pregnancy: stress processes, biopsychosocial models, and emerging research issues
-        "000287331200020", 
+        "000287331200020",
         // Intention to become pregnant and low birth weight and preterm birth: a systematic review
-        "000286603900008", 
+        "000286603900008",
         // Linkages among reproductive health, maternal health, and perinatal outcomes
-        "000285527800008", 
+        "000285527800008",
         // Baby on board: do responses to stress in the maternal brain mediate adverse pregnancy outcome?
-        "000280535500009", 
+        "000280535500009",
         // Not available: Global report on preterm birth and stillbirth (2 of 7): discovery science.
         // Disasters and perinatal health:a systematic review
         "000288002900013",
         // Support during pregnancy for women at increased risk of low birthweight babies
-        "000278858300045", 
+        "000278858300045",
         //Maternal exposure to domestic violence and pregnancy and birth outcomes: a systematic review and meta-analyses
         "000283855500011",
         //The role of stress in female reproduction and pregnancy: an update
@@ -97,7 +99,7 @@ object LearnFeatureWeights {
     val citationCountIndex = new CitationCountIndex(identity)
     val ageIndex = new AgeIndex(2012, identity)
     val indexes = List[Index](textIndex, citationCountIndex, ageIndex)
-    
+
     // open the reader and searcher
     val indexFiles = options.getIndexFiles.asScala
     val subReaders = for (f <- indexFiles) yield DirectoryReader.open(FSDirectory.open(f))
@@ -118,134 +120,142 @@ object LearnFeatureWeights {
         Some(topDocs.scoreDocs(0).doc)
       }
     }
-    
+
     // determine the documents for training
-    val docIDs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
+    val docIDs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID
     this.logger.info("Found %d documents".format(docIDs.size))
 
-    val weights = this.learnWeights(
-        indexes,
-        List(1.0f, 0.0f, 0.0f),
-        reader,
-        searcher,
-        docIDs,
-        options.getNHits,
-        options.getNIterations)
+    val scoredWeightsIter = new LearnFeatureWeightsIterator(
+      indexes,
+      List(1.0f, 0.0f, 0.0f),
+      reader,
+      searcher,
+      docIDs,
+      options.getNHits)
 
+    val scoredWeights = Buffer.empty[(Seq[Float], Double)]
+    for ((weights, map) <- scoredWeightsIter.take(options.getNIterations)) {
+      this.logger.info("%.4f MAP for %s".format(map, weights))
+      scoredWeights += weights -> map
+    }
+    val weights = scoredWeights.drop(2).maxBy(_._2)._1
     this.logger.info("Final weights: " + weights.toList)
 
     reader.close
   }
+}
+
+class LearnFeatureWeightsIterator(
+    indexes: Seq[Index],
+    initialWeights: Seq[Float],
+    reader: IndexReader,
+    searcher: IndexSearcher,
+    docIDs: Seq[Int],
+    nHits: Int) extends Iterator[(Seq[Float], Double)] {
   
-  def learnWeights(
-      indexes: Seq[Index],
-      initialWeights: Seq[Float],
-      reader: IndexReader,
-      searcher: IndexSearcher,
-      docIDs: Seq[Int],
-      nHits: Int,
-      nIterations: Int): Seq[Float] = {
-
-    // initialize index weights
-    var weights = initialWeights
-
-    // collections of all training instances so far
-    val instanceFeatures = Buffer.empty[Array[Feature]]
-    val instanceLabels = Buffer.empty[Double]
-    
-    // insert fake first instance to make label-index assignment predictable
-    instanceFeatures += Array.empty
-    instanceLabels += 0.0
-    
-    // repeatedly train model
-    for (iteration <- 1 to nIterations) {
-      this.logger.info("Current weights: " + weights)
-
-      // create main index as weighted sum of other indexes 
-      val index = new CombinedIndex(indexes zip weights: _*)
-
-      //get rid of the query norm so that scores are directly interpretable
-      searcher.setSimilarity(new DefaultSimilarity {
-        override def queryNorm(sumOfSquaredWeights: Float) = 1f
-      })
-
-      // generate one training example for each document in the index
-      val averagePrecisions = for {
-        doc <- docIDs
-        queryDocument = reader.document(doc)
-        // only use articles with an abstract and a bibliography
-        citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs)).iterator
-        abstractText = Option(queryDocument.get(FieldNames.abstractText)).getOrElse("")
-        titleText = Option(queryDocument.get(FieldNames.titleText)).getOrElse("")
-        text = abstractText + titleText
-        if !text.isEmpty
-      } yield {
-        val year = queryDocument.get(FieldNames.year).toInt
-
-        // determine what articles were cited
-        val citedIds = citedIdsString.split("\\s+").toSet
-
-        // create the query based from the title and abstract text,
-        // and only considering articles published before the query article
-        val query = new BooleanQuery()
-        val publishedBefore = NumericRangeQuery.newIntRange(
-            FieldNames.year, null, year, true, false)
-        query.add(publishedBefore, BooleanClause.Occur.MUST)
-        query.add(index.createQuery(text), BooleanClause.Occur.MUST)
-
-        // retrieve other articles based on the main query
-        val collector = new DocScoresCollector(nHits)
-        searcher.search(query, collector)
-        val docSubScores = collector.popDocSubScores
-        val labels = for (docScores <- docSubScores) yield {
-          val resultDocument = reader.document(docScores.doc)
-          val id = resultDocument.get(FieldNames.articleIDWhenCited)
-
-          // add label and features to training data
-          val label = citedIds.contains(id)
-          val features =
-            for ((score, i) <- docScores.subScores.zipWithIndex)
-              yield new FeatureNode(i + 1, score)
-          instanceFeatures += features.toArray
-          instanceLabels += (if (label) 1.0 else 0.0)
-          label
-        }
-
-        // calculate and yield the average precision
-        val relevantRanks =
-          for ((label, rank) <- labels.zipWithIndex; if label) yield rank
-        val precisions =
-          for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
-        precisions.sum / citedIds.size
-      }
-
-      // log the mean average precision
-      this.logger.info("MAP: %.4f".format(averagePrecisions.sum / averagePrecisions.size))
-
-      // train the model
-      val problem = new Problem
-      problem.x = instanceFeatures.toArray
-      problem.y = instanceLabels.toArray
-      problem.l = problem.x.length
-      problem.n = weights.length
-      val solver = SolverType.L2R_L2LOSS_SVC
-      val C = 10000.0
-      val eps = 0.001
-      val parameters = new Parameter(solver, C, eps)
-      // we care 1000 times as much about positive examples as negative ones
-      parameters.setWeights(Array(1000.0), Array(1))
-      val model = Linear.train(problem, parameters)
-      // positive model weights predict 0 class (and we want the reverse for our weights)
-      weights = model.getFeatureWeights.map(-_.toFloat)
-      val maxWeight = weights.map(math.abs).max
-      weights = weights.map(_ / maxWeight)
-    }
-    
-    // return the final weights
-    weights
+  // assemble just the minimum information we need from the training articles
+  val articles = for {
+    docID <- docIDs
+    queryDocument = reader.document(docID)
+    citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs)).iterator
+  } yield {
+    val year = queryDocument.get(FieldNames.year).toInt
+    val abstractText = Option(queryDocument.get(FieldNames.abstractText)).getOrElse("")
+    val titleText = Option(queryDocument.get(FieldNames.titleText)).getOrElse("")
+    val citedIDs = citedIdsString.split("\\s+").toSet
+    (docID, abstractText + titleText, year, citedIDs)
   }
 
-  val logger = Logger.getLogger(this.getClass.getName)
+  // get rid of the query norm so that scores are directly interpretable
+  searcher.setSimilarity(new DefaultSimilarity {
+    override def queryNorm(sumOfSquaredWeights: Float) = 1f
+  })
+
+  // initialize index weights
+  var weights = initialWeights
+  var index = new CombinedIndex(this.indexes zip this.weights: _*)
+
+  // create training instance buffers; add a fake instance to guarantee that label +1 is index 1
+  val instanceFeatures = Buffer[Array[Feature]](Array.empty)
+  val instanceLabels = Buffer[Double](0.0)
+
+  // infinite iterator, always return true
+  def hasNext = true
+
+  // score the current weights, and advance to the next weights
+  def next: (Seq[Float], Double) = {
+    val averagePrecisions = this.articles.map(this.scoreRetrievalAndAddInstances)
+    val result = (this.weights, averagePrecisions.sum / averagePrecisions.size)
+    this.weights = this.trainWeights
+    this.index = new CombinedIndex(this.indexes zip this.weights: _*)
+    result
+  }
+
+  // run a retrieval using the current weights and calculate mean average precision
+  // at the same time, collect retrieved articles as new training instances
+  def scoreRetrievalAndAddInstances(article: (Int, String, Int, Set[String])): Double = {
+    val (docID, text, year, citedIDs) = article
+
+    // create the query, only considering articles published before the query article
+    val query = new BooleanQuery()
+    val publishedBefore = NumericRangeQuery.newIntRange(FieldNames.year, null, year, true, false)
+    query.add(publishedBefore, BooleanClause.Occur.MUST)
+    query.add(this.index.createQuery(text), BooleanClause.Occur.MUST)
+
+    // retrieve other articles based on the main query
+    val collector = new DocScoresCollector(nHits)
+    searcher.search(query, collector)
+    val docSubScores = collector.popDocSubScores
+    val labels = for (docScores <- docSubScores) yield {
+      val resultDocument = reader.document(docScores.doc)
+      val id = resultDocument.get(FieldNames.articleIDWhenCited)
+
+      // add label and features to training data
+      val label = citedIDs.contains(id)
+      val features =
+        for ((score, i) <- docScores.subScores.zipWithIndex)
+          yield new FeatureNode(i + 1, score)
+      instanceFeatures += features.toArray
+      instanceLabels += (if (label) 1.0 else 0.0)
+      label
+    }
+
+    // calculate and yield the average precision
+    val relevantRanks =
+      for ((label, rank) <- labels.zipWithIndex; if label) yield rank
+    val precisions =
+      for ((rank, index) <- relevantRanks.zipWithIndex) yield (1.0 + index) / (1.0 + rank)
+    precisions.sum / citedIDs.size
+  }
+
+  // train a new set of weights from the training instances collected so far
+  def trainWeights: Seq[Float] = {
+    
+    // define the SVM problem from the training instances
+    val problem = new Problem
+    problem.x = this.instanceFeatures.toArray
+    problem.y = this.instanceLabels.toArray
+    problem.l = problem.x.length
+    problem.n = this.initialWeights.length
+    
+    // set the SVM hyper-parameters
+    val solver = SolverType.L2R_L2LOSS_SVC
+    val C = 10000.0
+    val eps = 0.001
+    val weightForPositiveExamples = 1000.0
+    val parameters = new Parameter(solver, C, eps)
+    parameters.setWeights(Array(weightForPositiveExamples), Array(1))
+    
+    // train the SVM model
+    val model = Linear.train(problem, parameters)
+    
+    // get the SVM weights, recalling that positive weights predict class 0 (we want the reverse)
+    val weights = model.getFeatureWeights.map(-_.toFloat)
+    
+    // normalize weights so that the largest weight is 1.0
+    val maxWeight = weights.map(math.abs).max
+    weights.map(_ / maxWeight)
+  }
 }
 
 case class DocScores(doc: Int, score: Float, subScores: Seq[Float])
