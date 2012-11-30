@@ -102,27 +102,6 @@ object LearnFeatureWeights {
     val indexFiles = options.getIndexFiles.asScala
     val subReaders = for (f <- indexFiles) yield DirectoryReader.open(FSDirectory.open(f))
     val reader = new ParallelCompositeReader(subReaders: _*)
-
-    val weights = this.learnWeights(
-        indexes,
-        List(1.0f, 0.0f, 0.0f),
-        reader,
-        articleIDs,
-        options.getNHits,
-        options.getNIterations)
-
-    this.logger.info("Final weights: " + weights.toList)
-
-    reader.close
-  }
-  
-  def learnWeights(
-      indexes: Seq[Index],
-      initialWeights: Seq[Float],
-      reader: IndexReader,
-      articleIDs: Seq[String],
-      nHits: Int,
-      nIterations: Int): Seq[Float] = {
     val searcher = new IndexSearcher(reader)
 
     // function for finding articles based on accession number (WoK article ID)
@@ -141,8 +120,31 @@ object LearnFeatureWeights {
     }
     
     // determine the documents for training
-    val docs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
-    this.logger.info("Found %d documents".format(docs.size))
+    val docIDs = for (articleID <- articleIDs; docID <- getDocID(articleID)) yield docID 
+    this.logger.info("Found %d documents".format(docIDs.size))
+
+    val weights = this.learnWeights(
+        indexes,
+        List(1.0f, 0.0f, 0.0f),
+        reader,
+        searcher,
+        docIDs,
+        options.getNHits,
+        options.getNIterations)
+
+    this.logger.info("Final weights: " + weights.toList)
+
+    reader.close
+  }
+  
+  def learnWeights(
+      indexes: Seq[Index],
+      initialWeights: Seq[Float],
+      reader: IndexReader,
+      searcher: IndexSearcher,
+      docIDs: Seq[Int],
+      nHits: Int,
+      nIterations: Int): Seq[Float] = {
 
     // initialize index weights
     var weights = initialWeights
@@ -169,7 +171,7 @@ object LearnFeatureWeights {
 
       // generate one training example for each document in the index
       val averagePrecisions = for {
-        doc <- docs
+        doc <- docIDs
         queryDocument = reader.document(doc)
         // only use articles with an abstract and a bibliography
         citedIdsString <- Option(queryDocument.get(FieldNames.citedArticleIDs)).iterator

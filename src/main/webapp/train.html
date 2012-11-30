@@ -15,10 +15,60 @@
 	</style>
 </head>
 <body>
+<form class="lift:Train?form=post">
 
 <h1>Train a Literature Search Model</h1>
 <p>
-Under construction. Check back soon!
+The first step in training a model is to select a set of articles that demonstrate good citation
+habits for your field.
+Your goal is to find articles that are representative of your area of research, and more
+importantly, have excellent bibliographies.
+The system learns its literature search model by comparing an article's contents against each of
+the articles in its bibliography.
 </p>
+
+<h2>1. Search for articles</h2>
+<p>
+We'll assume that you know the titles for a number of appropriate articles.
+Please use the search below to find your articles in the index.
+When you find an article, click the "Use for training" button beside it to add it to the training
+data.
+If you make a mistake, you can click the "Remove from training" button beside an article to remove
+it from the training data.
+</p>
+
+<div>
+<input type="text" id="query" name="query" size="80" />
+<input type="submit" id="submit" value="Search the Web of Knowledge" />
+</div>
+<div id="search-results"></div>
+
+<h2>2. Create a list of articles</h2>
+<div id="no-articles-selected">
+<p>No articles selected yet</p>
+</div>
+<div id="articles-selected"></div>
+
+<h2>3. Train a model</h2>
+<div id="no-training-allowed">
+<p>You must select at least 10 articles before training a model.</p>
+</div>
+<div id="training-allowed">
+<p>
+You may now click the button below to begin training. This may take several minutes.
+Please be patient.
+</p>
+<p>
+<button id="train" name="train" value="train">Begin training</button>
+</p>
+</div>
+
+<div id="model-recommendations">
+<h2>4. Use the model's recommendations</h2>
+The following weights were learned for you:
+<ul id="model-weights"></ul>
+</div>
+
+</form>
 </body>
 </html>
