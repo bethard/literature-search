@@ -1,4 +1,4 @@
-package info.bethard.litsearch
+package info.bethard.litsearch.webofknowledge
 
 import java.io.File
 import scala.collection.JavaConverters._
@@ -7,7 +7,8 @@ import com.lexicalscope.jewel.cli.{ Option => CliOption }
 import org.apache.lucene.store.FSDirectory
 import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.index.IndexWriter
-import org.apache.lucene.index.DirectoryReader
+import com.lexicalscope.jewel.cli.Option
+import info.bethard.litsearch.IndexConfig
 
 object MergeToSingleSegment {
 
