@@ -18,9 +18,9 @@ import net.liftweb.util.PassThru
 object Train {
 
   val indexes = List(
-    LiteratureSearch.textIndex,
-    LiteratureSearch.citationCountIndex,
-    LiteratureSearch.ageIndex)
+    Search.textIndex,
+    Search.citationCountIndex,
+    Search.ageIndex)
 
   val weightNames = List(
     "Text weight",
@@ -29,8 +29,8 @@ object Train {
 
   val weightMultipliers = List(
     1.0,
-    LiteratureSearch.citationCountScalingFactor,
-    LiteratureSearch.ageScalingFactor)
+    Search.citationCountScalingFactor,
+    Search.ageScalingFactor)
 
   private object query extends SessionVar("")
   private object nHits extends SessionVar(10)
@@ -55,7 +55,7 @@ object Train {
 
   def queryIndex: Unit = {
     if (!this.query.is.isEmpty) {
-      val indexQuery = LiteratureSearch.textIndex.createQuery(this.query.is)
+      val indexQuery = Search.textIndex.createQuery(this.query.is)
       val topDocs = Search.searcher.search(indexQuery, nHits.is)
       this.results.set(Some(topDocs))
     }
