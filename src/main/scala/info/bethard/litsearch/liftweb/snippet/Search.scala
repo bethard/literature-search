@@ -52,7 +52,7 @@ object Search {
   private val learnedCitationCountWeightString = "%.2f".format(learnedCitationCountWeight)
   private val learnedAgeWeightString = "%.2f".format(learnedAgeWeight)
 
-  private class SearchResettingSessionVar[T](value: T) extends SessionVar(value) {
+  class SearchResettingSessionVar[T](value: T) extends SessionVar(value) {
     override def set(value: T) = {
       if (value != this.is) {
         nHits.set(10)
@@ -66,9 +66,9 @@ object Search {
   private object results extends SessionVar[Option[TopDocs]](None)
 
   private object nHits extends SessionVar(10)
-  private object textWeight extends SearchResettingSessionVar(learnedTextWeightString)
-  private object citationCountWeight extends SearchResettingSessionVar(learnedCitationCountWeightString)
-  private object ageWeight extends SearchResettingSessionVar(learnedAgeWeightString)
+  object textWeight extends SearchResettingSessionVar(learnedTextWeightString)
+  object citationCountWeight extends SearchResettingSessionVar(learnedCitationCountWeightString)
+  object ageWeight extends SearchResettingSessionVar(learnedAgeWeightString)
 
   def render = {
     "#results" #> this.renderResults.getOrElse(NodeSeq.Empty) &

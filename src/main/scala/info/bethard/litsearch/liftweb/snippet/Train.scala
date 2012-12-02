@@ -10,12 +10,18 @@ import info.bethard.litsearch.AgeIndex
 import info.bethard.litsearch.CitationCountIndex
 import info.bethard.litsearch.LearnFeatureWeightsIterator
 import info.bethard.litsearch.TitleAbstractTextIndex
+import net.liftweb.http.S
 import net.liftweb.http.SHtml
 import net.liftweb.http.SessionVar
 import net.liftweb.util.Helpers.strToCssBindPromoter
 import net.liftweb.util.PassThru
 
 object Train {
+
+  val weightVars = List(
+    Search.textWeight,
+    Search.citationCountWeight,
+    Search.ageWeight)
 
   val indexes = List(
     Search.textIndex,
@@ -37,7 +43,7 @@ object Train {
   private object results extends SessionVar[Option[TopDocs]](None)
   private object trainingDocs extends SessionVar(mutable.LinkedHashSet.empty[Int])
   private object weights extends SessionVar[Option[Seq[Float]]](None)
-
+  
   def render = {
     "name=query" #> SHtml.textElem(this.query) andThen
       "#search-results" #> this.renderResults.getOrElse(NodeSeq.Empty) andThen
@@ -50,7 +56,8 @@ object Train {
       "#training-allowed" #> this.hideIf(this.trainingDocs.is.size < 10) andThen
       "#train" #> SHtml.onSubmitUnit(() => this.train) andThen
       "#model-recommendations" #> this.hideIf(this.weights.is.isEmpty) andThen
-      "#model-weights" #> this.renderModelWeights.getOrElse(NodeSeq.Empty)
+      "#model-weights" #> this.renderModelWeights.getOrElse(NodeSeq.Empty) andThen
+      "#use-weights" #> SHtml.onSubmitUnit(() => this.setWeightsAndRedirectToSearch)
   }
 
   def queryIndex: Unit = {
@@ -125,5 +132,15 @@ object Train {
     val printingIter = scoredWeightsIter.map(w => {println(w); w}) 
     val weights = printingIter.take(nIterations).drop(2).maxBy(_._2)._1
     this.weights.set(Some(weights))
+  }
+  
+  def setWeightsAndRedirectToSearch: Unit = {
+    for (weights <- this.weights.is) {
+      val adjustedWeights = (weights, this.weightMultipliers).zipped.map(_ * _)
+      for ((weight, weightVar) <- adjustedWeights zip this.weightVars) {
+        weightVar.set("%.2f".format(weight))
+      }
+      S.redirectTo("search.html")
+    }
   }
 }
