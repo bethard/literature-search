@@ -28,7 +28,7 @@ abstract class IndexSuiteBase extends FunSuite {
 
     def delete(file: File): Unit = {
       // delete child files recursively
-      Option(file.listFiles).flatten.map(this.delete)
+      Option(file.listFiles).toList.flatten.map(this.delete)
       // delete this file (and assert that it was actually deleted)
       assert(file.delete() === true)
     }

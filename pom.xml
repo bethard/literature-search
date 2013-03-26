@@ -30,15 +30,16 @@
 		<encoding>UTF-8</encoding>
 		<maven.compiler.source>1.6</maven.compiler.source>
 		<maven.compiler.target>1.6</maven.compiler.target>
-		<scala.version>2.9.1</scala.version>
-		<lift.version>2.4</lift.version>
+		<scala.full.version>2.10.0</scala.full.version>
+		<scala.version>2.10</scala.version>
+		<lift.version>2.5-RC2</lift.version>
 		<lucene.version>4.0.0</lucene.version>
 	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>org.scala-lang</groupId>
 			<artifactId>scala-library</artifactId>
-			<version>${scala.version}</version>
+			<version>${scala.full.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.lucene</groupId>
@@ -73,12 +74,12 @@
 		<dependency>
 			<groupId>com.github.scala-incubator.io</groupId>
 			<artifactId>scala-io-core_${scala.version}</artifactId>
-			<version>0.4.1-seq</version>
+			<version>0.4.2</version>
 		</dependency>
 		<dependency>
 			<groupId>com.github.scala-incubator.io</groupId>
 			<artifactId>scala-io-file_${scala.version}</artifactId>
-			<version>0.4.1-seq</version>
+			<version>0.4.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -95,7 +96,7 @@
 		<dependency>
 			<groupId>org.scalatest</groupId>
 			<artifactId>scalatest_${scala.version}</artifactId>
-			<version>1.7.1</version>
+			<version>1.9.1</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
