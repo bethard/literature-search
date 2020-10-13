@@ -33,7 +33,7 @@
 		<scala.full.version>2.10.0</scala.full.version>
 		<scala.version>2.10</scala.version>
 		<lift.version>2.5-RC2</lift.version>
-		<lucene.version>4.0.0</lucene.version>
+		<lucene.version>8.6.3</lucene.version>
 	</properties>
 	<dependencies>
 		<dependency>
